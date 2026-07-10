@@ -118,7 +118,8 @@ class Supplier(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("tenant_id", "supplier_id", name="uq_suppliers_tenant_id"),)
 
     supplier_id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    # tenant_id 単独索引は不要。UNIQUE(tenant_id, supplier_id) の先頭プレフィックスで代替される。
+    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False)
     supplier_name: Mapped[str] = mapped_column(Text, nullable=False)
     supplier_category: Mapped[str | None] = mapped_column(Text)
     supplier_memo: Mapped[str | None] = mapped_column(Text)  # 関係性・注意点メモ（長文）
@@ -131,7 +132,8 @@ class Product(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("tenant_id", "product_id", name="uq_products_tenant_id"),)
 
     product_id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    # tenant_id 単独索引は不要。UNIQUE(tenant_id, product_id) の先頭プレフィックスで代替される。
+    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False)
     product_name: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[str | None] = mapped_column(Text)  # 食肉/卵 等
     unit: Mapped[str | None] = mapped_column(Text)  # 単位=価格の分母
@@ -154,7 +156,8 @@ class ProductSpec(Base, TimestampMixin):
     )
 
     spec_id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    # tenant_id 単独索引は不要。UNIQUE(tenant_id, spec_id) の先頭プレフィックスで代替される。
+    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False)
     product_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     origin: Mapped[str | None] = mapped_column(Text)  # 産地
     part: Mapped[str | None] = mapped_column(Text)  # 部位
@@ -236,7 +239,8 @@ class NegotiationCase(Base, TimestampMixin):
     )
 
     # case_no は自動採番でないため (tenant_id, case_no) 複合 PK を維持（設計どおり）。
-    tenant_id: Mapped[str] = mapped_column(String(36), primary_key=True, index=True)
+    # 複合 PK が tenant_id を先頭に含むため、tenant_id 単独索引は付けない（重複回避）。
+    tenant_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     case_no: Mapped[str] = mapped_column(String(20), primary_key=True)  # 採番は 2.7 / numbering.py
     supplier_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     spec_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -268,7 +272,8 @@ class StrategySheet(Base, TimestampMixin):
     )
 
     sheet_id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    # tenant_id 単独索引は不要。UNIQUE(tenant_id, sheet_id) の先頭プレフィックスで代替される。
+    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False)
     case_no: Mapped[str] = mapped_column(String(20), nullable=False)
     price_diff: Mapped[float | None] = mapped_column(Numeric(10, 2))  # 提示−現行
     annual_impact: Mapped[int | None] = mapped_column(BigInteger)  # 年間影響額 ¥
@@ -303,7 +308,8 @@ class NegotiationResult(Base, TimestampMixin):
     )
 
     result_id: Mapped[int] = mapped_column(BigIntPK, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    # tenant_id 単独索引は不要。UNIQUE(tenant_id, result_id) の先頭プレフィックスで代替される。
+    tenant_id: Mapped[str] = mapped_column(String(36), nullable=False)
     case_no: Mapped[str] = mapped_column(String(20), nullable=False)
     result_date: Mapped[Date | None] = mapped_column(Date)
     final_price: Mapped[float | None] = mapped_column(Numeric(10, 2))  # 決着単価（FR-11）

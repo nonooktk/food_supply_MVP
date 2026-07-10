@@ -13,6 +13,7 @@ from __future__ import annotations
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote_plus
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -107,14 +108,19 @@ class Settings(BaseSettings):
         if self.db_backend is DbBackend.SQLITE:
             return f"sqlite:///{self.sqlite_path}"
         if self.db_backend is DbBackend.MYSQL:
+            # user / password は記号（@ : / 等）を含みうるため URL エンコードする。
+            user = quote_plus(self.db_user)
+            password = quote_plus(self.db_password)
             return (
-                f"mysql+pymysql://{self.db_user}:{self.db_password}"
+                f"mysql+pymysql://{user}:{password}"
                 f"@{self.db_host}:{self.db_port}/{self.db_name}"
             )
         if self.db_backend is DbBackend.POSTGRESQL:
             # postgresql は sslmode をクエリで渡せる（psycopg ドライバ・要 requirements 追加）。
+            user = quote_plus(self.pg_user)
+            password = quote_plus(self.pg_password)
             return (
-                f"postgresql+psycopg://{self.pg_user}:{self.pg_password}"
+                f"postgresql+psycopg://{user}:{password}"
                 f"@{self.pg_host}:{self.pg_port}/{self.pg_name}?sslmode={self.pg_sslmode}"
             )
         # Enum で縛っているため通常到達しないが、保険として明示的に失敗させる。
@@ -123,15 +129,20 @@ class Settings(BaseSettings):
     def database_connect_args(self) -> dict:
         """SQLAlchemy の create_engine に渡す connect_args を DB 種別ごとに返す。
 
-        MySQL（Azure）は TLS 必須のため、SSL を無効化しない限り ssl 設定を付与する。
-        DB エンジンの生成自体は app/db 側（ロトム／後続タスク）で行う。
+        MySQL（Azure）は ``require_secure_transport=ON`` のため TLS が必須。SSL を無効化
+        しない限り SSLContext を付与して暗号化接続を強制する（空 dict は PyMySQL では
+        falsy 扱いとなり TLS が無効化される点に注意）。DB_SSL_CA 指定時はその CA で
+        サーバ証明書を検証し、未指定時は暗号化のみ要求する（疎通用途。運用では CA 設定を推奨）。
         """
         if self.db_backend is DbBackend.MYSQL and not self.db_ssl_disabled:
-            ssl: dict = {}
-            if self.db_ssl_ca:
-                ssl["ca"] = self.db_ssl_ca
-            # ca 未指定でも ssl を有効化する（空 dict で TLS を要求）。
-            return {"ssl": ssl}
+            import ssl as _ssl
+
+            ctx = _ssl.create_default_context(cafile=self.db_ssl_ca or None)
+            if not self.db_ssl_ca:
+                # CA 未指定時は証明書検証を行わず、暗号化のみ要求する。
+                ctx.check_hostname = False
+                ctx.verify_mode = _ssl.CERT_NONE
+            return {"ssl": ctx}
         return {}
 
 

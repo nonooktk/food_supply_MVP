@@ -22,6 +22,9 @@ azure-search-documents==11.5.2
 # ----- ナレッジグラフ -----
 networkx==3.4.2
 
+# ----- KRE 設定ローダ（kre/config/loader.py が retrieval_config.yaml を読む） -----
+PyYAML==6.0.3
+
 # ----- 観測性（構造化ログ） -----
 structlog==24.4.0
 

@@ -49,7 +49,11 @@ def run_migrations_online() -> None:
     """オンライン（実接続）でマイグレーションを実行する。"""
     section = config.get_section(config.config_ini_section) or {}
     section["sqlalchemy.url"] = _get_url()
-    connectable = engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
+    # MySQL の TLS 必須（require_secure_transport=ON）等に対応するため connect_args を渡す。
+    connect_args = get_settings().database_connect_args()
+    connectable = engine_from_config(
+        section, prefix="sqlalchemy.", poolclass=pool.NullPool, connect_args=connect_args
+    )
 
     with connectable.connect() as connection:
         context.configure(

@@ -67,7 +67,11 @@ def _to_full_year(token: str) -> int:
 
 
 def normalize_percent(value: str | float | int | None) -> Decimal | None:
-    """`+3.2%` / `3.20%` / `3.2` 等を Decimal に正規化する（%・符号・全角を除去）。"""
+    """`+3.2%` / `3.20%` / `3.2` 等を Decimal に正規化する。
+
+    `%`・正符号 `+`・桁区切り `,`・全角を除去する。**負符号 `-` は保持**し、`-1.5%` は
+    `Decimal('-1.5')` になる（相場下落等の負値を失わないため）。
+    """
     if value is None or value == "":
         return None
     s = to_halfwidth(str(value)).strip().replace("%", "").replace("+", "").replace(",", "")
