@@ -1,9 +1,11 @@
 # ふりぃらじかるず — 購買交渉支援アプリ MVP
 
-飲食店向けの購買交渉・相場推定を支援するアプリケーションです。本リポジトリは MVP の基盤（バックエンド Python 骨組み・フロント枠・設計/ドキュメント枠）です。
+飲食店向けの購買交渉・相場推定を支援するアプリケーション（MVP）です。
 
-- 設計正本: MyDocs `outputs/freeradicals-rfp/02_アーキテクチャ設計書_draft-v3.md`（MySQL 化版。§1 構成図 / §5 バックエンド構成 / §9 KRE 分割 / §10 KRE 契約）
-- チーム規定: toolmaker 保管庫 `00_組織/社内規定/`（作業・レビュー・リリース・セキュリティ・Slack）
+- 要件: [docs/要件定義書.md](docs/要件定義書.md)
+- 検収資料: [docs/検収資料.md](docs/検収資料.md)
+- 開発の始め方・規約: [CLAUDE.md](CLAUDE.md)
+- 拡張タスクの切り出し: [docs/TASK_knowledge-graph-optimization.md](docs/TASK_knowledge-graph-optimization.md)
 
 ## 構成
 
