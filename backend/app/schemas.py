@@ -139,3 +139,14 @@ class ThreeLineResult(CamelModel):
 
 class ThreeLineSaveInput(CamelModel):
     lines: list[ThreeLine]
+
+
+# ---- 作戦シート（AI 生成・画面④・FR-08） ------------------------------------
+class StrategyPoint(CamelModel):
+    text: str
+    citations: list[Citation] = Field(default_factory=list)
+
+
+class StrategyDraft(CamelModel):
+    points: list[StrategyPoint] = Field(default_factory=list)
+    scenario: str = ""

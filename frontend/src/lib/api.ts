@@ -22,6 +22,7 @@ import type {
   PastCase,
   PastCaseResult,
   RateInfo,
+  StrategyDraft,
   ThreeLine,
   ThreeLineResult,
 } from "@/lib/types";
@@ -49,6 +50,10 @@ export interface Api {
   saveCompanyPlan(caseNo: string, plan: CompanyPlan): Promise<CompanyPlan>;
   getThreeLines(caseNo: string): Promise<ThreeLineResult>;
   saveThreeLines(caseNo: string, lines: ThreeLine[]): Promise<ThreeLineResult>;
+  // 画面④ 作戦シート（FR-08）。workspaceApi のシグネチャに合わせる。
+  generateStrategy(caseNo: string): Promise<StrategyDraft>;
+  getStrategyDraft(caseNo: string): Promise<StrategyDraft | null>;
+  saveStrategyDraft(caseNo: string, draft: StrategyDraft): Promise<void>;
 }
 
 /** ネットワーク遅延を模した待機（モックのローディング表示を確認できるように） */
@@ -233,6 +238,71 @@ class MockApi implements Api {
     store.setLines(caseNo, lines);
     return this.getThreeLines(caseNo);
   }
+
+  async getStrategyDraft(caseNo: string): Promise<StrategyDraft | null> {
+    await delay(150);
+    return store.getStrategy(caseNo);
+  }
+
+  async saveStrategyDraft(caseNo: string, draft: StrategyDraft): Promise<void> {
+    await delay(300);
+    store.setStrategy(caseNo, draft);
+  }
+
+  /**
+   * FR-08 交渉ポイント・シナリオの AI 生成（モックのシミュレーション）。
+   * 実 AI 未接続時、過去経緯・3ラインから現実的な下書きを組み立てて返す（バックエンドと同型）。
+   */
+  async generateStrategy(caseNo: string): Promise<StrategyDraft> {
+    await delay(900);
+    const [detail, lines, past] = await Promise.all([
+      this.getCase(caseNo),
+      this.getThreeLines(caseNo),
+      this.getPastCases(caseNo),
+    ]);
+    const target = lines.lines.find((l) => l.type === "target")?.value ?? detail.quotedPrice;
+    const walkaway = lines.lines.find((l) => l.type === "walkaway")?.value ?? detail.quotedPrice;
+    const pastItems = past.state === "ready" ? past.items : [];
+    const direct = pastItems.find((p) => !p.relation);
+    const neighbor = pastItems.find((p) => p.relation === "same_supplier");
+
+    const points: StrategyDraft["points"] = [];
+    points.push({
+      text: `為替・相場動向を根拠に提示見積の妥当性を確認し、目標 ¥${target.toLocaleString(
+        "ja-JP",
+      )}/kg を起点に交渉する。撤退 ¥${walkaway.toLocaleString("ja-JP")}/kg を超える提示には応じない。`,
+      citations: direct ? direct.citations : [],
+    });
+    if (direct) {
+      points.push({
+        text: `前回（${direct.caseNo}）は ¥${direct.settledPrice.toLocaleString(
+          "ja-JP",
+        )}/kg で決着。同水準を基準に、急な値上げには前回条件との整合を求める。`,
+        citations: direct.citations,
+      });
+    }
+    points.push({
+      text: `年間発注量を背景に数量メリット・長期契約を訴求する。${
+        neighbor
+          ? `同一取引先の別商材（${neighbor.caseNo}・¥${neighbor.settledPrice.toLocaleString(
+              "ja-JP",
+            )}/kg）でも数量拡大で単価を抑えた実績がある。`
+          : ""
+      }`,
+      citations: neighbor ? neighbor.citations : [],
+    });
+
+    const scenario =
+      `${detail.company}との${detail.product}交渉。まず相場・為替を根拠に提示見積の水準を確認し、` +
+      `目標 ¥${target.toLocaleString("ja-JP")}/kg を提示する。相手の値上げ要求には前回決着` +
+      `${direct ? `（${direct.caseNo}・¥${direct.settledPrice.toLocaleString("ja-JP")}/kg）` : ""}` +
+      `との整合を求めつつ、年間数量・長期契約を条件に単価抑制を交渉する。` +
+      `撤退ライン ¥${walkaway.toLocaleString("ja-JP")}/kg を超える場合は持ち帰り再検討とする。`;
+
+    const draft: StrategyDraft = { points, scenario };
+    store.setStrategy(caseNo, draft); // 生成物を永続化（バックエンドの generate も保存する）
+    return draft;
+  }
 }
 
 /** ---- 実 API 実装（NEXT_PUBLIC_USE_MOCK=false）----
@@ -329,6 +399,21 @@ class RealApi implements Api {
     return this.req<ThreeLineResult>(`/cases/${encodeURIComponent(caseNo)}/three-lines`, {
       method: "PUT",
       body: JSON.stringify({ lines }),
+    });
+  }
+  generateStrategy(caseNo: string): Promise<StrategyDraft> {
+    // FR-08 の AI 生成（KRE 供給の過去経緯・グラフ＋3ラインを根拠に、AI は価格を決めない）。
+    return this.req<StrategyDraft>(`/cases/${encodeURIComponent(caseNo)}/strategy/generate`, {
+      method: "POST",
+    });
+  }
+  getStrategyDraft(caseNo: string): Promise<StrategyDraft | null> {
+    return this.req<StrategyDraft | null>(`/cases/${encodeURIComponent(caseNo)}/strategy`);
+  }
+  saveStrategyDraft(caseNo: string, draft: StrategyDraft): Promise<void> {
+    return this.req<void>(`/cases/${encodeURIComponent(caseNo)}/strategy`, {
+      method: "PUT",
+      body: JSON.stringify(draft),
     });
   }
 }

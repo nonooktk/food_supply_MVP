@@ -82,16 +82,23 @@ def _cached_stub_engine():
     return default_stub()
 
 
-def get_retrieval_engine():
-    """KRE の RetrievalEngine を DI で返す。
+@lru_cache(maxsize=1)
+def _cached_azure_engine():
+    """KRE 本実装（AzureRetrievalEngine）を1度だけ構築してキャッシュする。"""
+    from kre.engine import default_engine
 
-    ``USE_KRE_STUB=true`` のときは同梱 fixtures のスタブ実装（AI Search/AOAI 未接続でも動く）。
-    本実装（AzureRetrievalEngine）はロトムが KRE 側で用意し、ここで差し替える（設計 v3 §5）。
+    return default_engine()
+
+
+def get_retrieval_engine():
+    """KRE の RetrievalEngine を DI で返す（設計 v3 §5）。
+
+    - ``USE_KRE_STUB=true``（既定）… 同梱 fixtures のスタブ実装（AI Search/AOAI 未接続でも動く）。
+    - ``USE_KRE_STUB=false``        … 本実装 ``kre.engine.AzureRetrievalEngine``（AI Search + GraphRAG）。
+
+    どちらも同一の RetrievalEngine Protocol を満たすため、本体の呼び出し口は不変（stub ⇄ 本実装）。
     """
     settings = get_settings()
     if settings.use_kre_stub:
         return _cached_stub_engine()
-    # 本実装は後続タスク。未接続での誤起動を防ぐため明示的に失敗させる。
-    raise ApiProblem(
-        503, "検索エンジンが未接続です", detail="USE_KRE_STUB=false ですが本実装は未提供です。"
-    )
+    return _cached_azure_engine()
