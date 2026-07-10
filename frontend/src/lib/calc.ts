@@ -35,14 +35,13 @@ function clamp(x: number, lo: number, hi: number): number {
 
 /**
  * 算出に用いる「過去価格」を取り出す。
- * グラフ補完（relation 付き＝同一取引先の別商材等）は数値算出には使わず、
- * 直接一致（relation なし＝同一商材×取引先）の決着単価のみを過去最安・過去平均に用いる。
- * 直接一致が無ければ全過去、それも無ければ空配列を返す（呼び出し側で相場フォールバック）。
+ * backend（services/pricing.past_settled_prices）を正とし、**直接一致（relation なし＝同一 spec）**の
+ * 決着単価のみを過去最安・過去平均に用いる。グラフ補完（relation 付き＝同一取引先の別商材等）は
+ * 数値算出に使わない。直接一致が無ければ空配列を返し、呼び出し側で相場フォールバックする
+ * （backend も同一スペックの決着が無ければ相場で代替するため、front/back を一致させる）。
  */
 function pastPrices(pastCases: PastCase[]): number[] {
-  const direct = pastCases.filter((c) => !c.relation).map((c) => c.settledPrice);
-  if (direct.length > 0) return direct;
-  return pastCases.map((c) => c.settledPrice);
+  return pastCases.filter((c) => !c.relation).map((c) => c.settledPrice);
 }
 
 /**

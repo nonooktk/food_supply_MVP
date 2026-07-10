@@ -1,17 +1,16 @@
-"""case_view.py — DB モデル → API スキーマの変換ヘルパ。
+"""case_view.py — DB モデル → API スキーマの変換ヘルパ（Repository 経由）。
 
 案件のステータス写像・商材表示名の組み立てなど、複数エンドポイントで共有する読み取り用の
-変換を集約する。書き込み系のテナント強制は Repository（二層防御の第1層）が担う。
+変換を集約する。DB アクセスは ``TenantScopedRepository`` 経由で、テナント境界は Repository が
+強制する（§2.8 ルール1・素のセッションを画面/サービス層へ露出しない）。
 """
 
 from __future__ import annotations
 
 from typing import Optional
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from app.db import models as m
+from app.db.repository import TenantScopedRepository
 from app.schemas import CaseDetail, CaseStatus
 
 # DB の日本語ステータス ⇄ フロントのステータスキー。
@@ -23,14 +22,9 @@ _DB_TO_UI_STATUS: dict[str, CaseStatus] = {
 _UI_TO_DB_STATUS: dict[str, str] = {v: k for k, v in _DB_TO_UI_STATUS.items()}
 
 
-def load_case(session: Session, tenant_id: str, case_no: str) -> Optional[m.NegotiationCase]:
+def load_case(repo: TenantScopedRepository, case_no: str) -> Optional[m.NegotiationCase]:
     """テナント境界内で案件を1件取得する（無ければ None）。"""
-    return session.execute(
-        select(m.NegotiationCase).where(
-            m.NegotiationCase.tenant_id == tenant_id,
-            m.NegotiationCase.case_no == case_no,
-        )
-    ).scalar_one_or_none()
+    return repo.get(m.NegotiationCase, case_no=case_no)
 
 
 def db_status_to_ui(value: Optional[str]) -> CaseStatus:
@@ -58,7 +52,7 @@ def product_display(product: Optional[m.Product], spec: Optional[m.ProductSpec])
 
 
 def build_case_detail(
-    session: Session,
+    repo: TenantScopedRepository,
     case: m.NegotiationCase,
     *,
     supplier: Optional[m.Supplier] = None,
@@ -67,27 +61,14 @@ def build_case_detail(
 ) -> CaseDetail:
     """NegotiationCase から CaseDetail を組み立てる。
 
-    関連（取引先・スペック・商材）は未指定なら本関数内で取得する。すべてテナント境界内。
+    関連（取引先・スペック・商材）は未指定なら Repository 経由で取得する（すべてテナント境界内）。
     """
-    tid = case.tenant_id
     if supplier is None:
-        supplier = session.execute(
-            select(m.Supplier).where(
-                m.Supplier.tenant_id == tid, m.Supplier.supplier_id == case.supplier_id
-            )
-        ).scalar_one_or_none()
+        supplier = repo.get(m.Supplier, supplier_id=case.supplier_id)
     if spec is None:
-        spec = session.execute(
-            select(m.ProductSpec).where(
-                m.ProductSpec.tenant_id == tid, m.ProductSpec.spec_id == case.spec_id
-            )
-        ).scalar_one_or_none()
+        spec = repo.get(m.ProductSpec, spec_id=case.spec_id)
     if product is None and spec is not None:
-        product = session.execute(
-            select(m.Product).where(
-                m.Product.tenant_id == tid, m.Product.product_id == spec.product_id
-            )
-        ).scalar_one_or_none()
+        product = repo.get(m.Product, product_id=spec.product_id)
 
     return CaseDetail(
         case_no=case.case_no,

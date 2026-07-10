@@ -8,9 +8,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_tenant, get_session
+from app.api.deps import get_repo
+from app.db.repository import TenantScopedRepository
 from app.errors import ApiProblem
 from app.schemas import RateInfo
 from app.services.case_view import load_case
@@ -25,16 +25,15 @@ _NOTE_NO_DATA = "相場データ未登録です。手入力または CSV 取込�
 @router.get("/cases/{case_no}/rate", response_model=RateInfo)
 def get_rate(
     case_no: str,
-    session: Session = Depends(get_session),
-    tenant_id: str = Depends(get_current_tenant),
+    repo: TenantScopedRepository = Depends(get_repo),
 ) -> RateInfo:
     """案件のスペックの相場情報を返す。"""
-    case = load_case(session, tenant_id, case_no)
+    case = load_case(repo, case_no)
     if case is None:
         raise ApiProblem(404, "案件が見つかりません", detail=f"{case_no} は存在しません。")
 
-    latest = latest_market_rate(session, tenant_id, case.spec_id)
-    count = market_rate_count(session, tenant_id, case.spec_id)
+    latest = latest_market_rate(repo, case.spec_id)
+    count = market_rate_count(repo, case.spec_id)
     current_price = float(case.current_price) if case.current_price is not None else 0.0
 
     if latest is None:

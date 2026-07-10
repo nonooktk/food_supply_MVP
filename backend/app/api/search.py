@@ -3,22 +3,22 @@
 - GET /cases/{case_no}/past-cases … 同一スペック/取引先の過去決着を返す。
 
 設計 v3 §5.1 のとおり、本エンドポイントは KRE（RetrievalEngine）を DI で呼ぶ BFF。
-MVP では過去経緯の実データ（決着単価等）を DB から構築し、KRE スタブ（USE_KRE_STUB=true）を
-契約越しに呼び出してグラフ文脈・引用元を得る（越境ゼロは KRE 契約側で担保・§10.5(4)）。
-KRE 本実装が入ったら、ヒットの ref 解決に置き換える。
+MVP では過去経緯の実データ（決着単価等）を Repository 経由で DB から構築し、KRE スタブ
+（USE_KRE_STUB=true）を契約越しに呼び出してグラフ文脈・引用元を得る（越境ゼロは KRE 契約側で
+担保・§10.5(4)）。KRE 本実装が入ったら、ヒットの ref 解決に置き換える。
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_tenant, get_retrieval_engine, get_session
+from app.api.deps import get_repo, get_retrieval_engine, get_trace_id
 from app.db import models as m
+from app.db.repository import TenantScopedRepository
 from app.errors import ApiProblem
+from app.observability.logging import emit_error
 from app.schemas import Citation, PastCase, PastCaseResult
-from app.services.case_view import load_case, product_display
+from app.services.case_view import product_display
 from kre.contract import RetrieveQuery, RetrieveRequest
 
 router = APIRouter(tags=["search"])
@@ -40,65 +40,43 @@ def _build_citation(case: m.NegotiationCase, result: m.NegotiationResult, compan
 @router.get("/cases/{case_no}/past-cases", response_model=PastCaseResult)
 def get_past_cases(
     case_no: str,
-    session: Session = Depends(get_session),
-    tenant_id: str = Depends(get_current_tenant),
+    repo: TenantScopedRepository = Depends(get_repo),
     engine=Depends(get_retrieval_engine),
+    trace_id: str = Depends(get_trace_id),
 ) -> PastCaseResult:
     """当該案件のスペック/取引先に関連する過去決着を返す。"""
-    current = load_case(session, tenant_id, case_no)
+    current = repo.get(m.NegotiationCase, case_no=case_no)
     if current is None:
         raise ApiProblem(404, "案件が見つかりません", detail=f"{case_no} は存在しません。")
 
     # KRE を契約越しに呼ぶ（DI・グラフ文脈/引用元供給。越境ゼロは KRE 側で強制）。
     # KRE はエンリッチメントのためベストエフォート。障害時も DB 由来の過去経緯は返す
-    # （デザインガイド §3.2 の部分エラー耐性）。本実装導入時は hits.ref 解決に置き換える。
+    # （デザインガイド §3.2 の部分エラー耐性）。想定外例外は trace_id 付きで記録してから続行。
     try:
         engine.retrieve(
             RetrieveRequest(
-                tenant_id=tenant_id,
+                tenant_id=repo.tenant_id,
                 query=RetrieveQuery(spec_id=current.spec_id, supplier_id=current.supplier_id),
             )
         )
-    except Exception:  # noqa: BLE001 - KRE 障害は過去経緯表示を止めない
-        pass
+    except Exception as exc:  # noqa: BLE001 - KRE 障害は過去経緯表示を止めない
+        emit_error(
+            "past_cases.kre_retrieve",
+            tenant_id=repo.tenant_id,
+            trace_id=trace_id,
+            error=type(exc).__name__,
+            case_no=case_no,
+        )
 
     try:
-        # 過去決着の実データを DB から構築（同一スペック=直接一致 / 同一取引先=グラフ補完）。
-        rows = session.execute(
-            select(m.NegotiationResult, m.NegotiationCase)
-            .join(
-                m.NegotiationCase,
-                (m.NegotiationResult.tenant_id == m.NegotiationCase.tenant_id)
-                & (m.NegotiationResult.case_no == m.NegotiationCase.case_no),
-            )
-            .where(
-                m.NegotiationResult.tenant_id == tenant_id,
-                m.NegotiationCase.case_no != case_no,
-                (m.NegotiationCase.spec_id == current.spec_id)
-                | (m.NegotiationCase.supplier_id == current.supplier_id),
-            )
-            .order_by(m.NegotiationResult.result_date.desc())
-        ).all()
+        # 過去決着の実データを Repository 経由で構築（同一スペック=直接一致 / 同一取引先=グラフ補完）。
+        rows = repo.related_past_results(current.spec_id, current.supplier_id, case_no)
 
         items: list[PastCase] = []
         for result, past in rows:
-            supplier = session.execute(
-                select(m.Supplier).where(
-                    m.Supplier.tenant_id == tenant_id, m.Supplier.supplier_id == past.supplier_id
-                )
-            ).scalar_one_or_none()
-            spec = session.execute(
-                select(m.ProductSpec).where(
-                    m.ProductSpec.tenant_id == tenant_id, m.ProductSpec.spec_id == past.spec_id
-                )
-            ).scalar_one_or_none()
-            product = None
-            if spec is not None:
-                product = session.execute(
-                    select(m.Product).where(
-                        m.Product.tenant_id == tenant_id, m.Product.product_id == spec.product_id
-                    )
-                ).scalar_one_or_none()
+            supplier = repo.get(m.Supplier, supplier_id=past.supplier_id)
+            spec = repo.get(m.ProductSpec, spec_id=past.spec_id)
+            product = repo.get(m.Product, product_id=spec.product_id) if spec is not None else None
             company = supplier.supplier_name if supplier else ""
             prod_name = product_display(product, spec)
 
@@ -116,9 +94,15 @@ def get_past_cases(
                 )
             )
 
-        state = "ready" if items else "empty"
-        return PastCaseResult(state=state, items=items)
+        return PastCaseResult(state="ready" if items else "empty", items=items)
     except ApiProblem:
         raise
-    except Exception:  # noqa: BLE001 - 過去経緯は部分エラーを許容（デザインガイド §3.2）
+    except Exception as exc:  # noqa: BLE001 - 過去経緯は部分エラーを許容（デザインガイド §3.2）
+        emit_error(
+            "past_cases.build",
+            tenant_id=repo.tenant_id,
+            trace_id=trace_id,
+            error=type(exc).__name__,
+            case_no=case_no,
+        )
         return PastCaseResult(state="error", items=[])

@@ -160,19 +160,35 @@ export function setCaseStatus(caseNo: string, status: CaseStatus): void {
   saveStore(s);
 }
 
+/** 過去経緯マッチ（backend の related_past_results と同じ意味論の relation を付与）。 */
+export interface PastResultMatch {
+  record: ResultRecord;
+  /** direct=同一 spec（＝商材キー一致）/ same_supplier=同一取引先の別商材。 */
+  relation: "direct" | "same_supplier";
+}
+
 /**
- * 判断継承（BR-10）: 同一商材×取引先で決着済みの結果を過去経緯候補として返す。
- * 自分自身の案件は除外する。②情報収集の過去経緯にこの結果が現れる。
+ * 判断継承（BR-10）: 決着済みの結果を過去経緯候補として返す。自分自身の案件は除外する。
+ * backend（repository.related_past_results）と意味論を揃える:
+ *   - 商材キー（product＝spec 相当）一致 → direct（数値算出に使う直接一致）
+ *   - 取引先キー（company＝supplier 相当）一致（別商材） → same_supplier（グラフ補完・数値には使わない）
+ * ※モックは spec_id/supplier_id を持たないため、表示文字列 product/company を spec/supplier の
+ *   代理キーとして用いる（company×product の AND 一致ではなく、backend と同じ OR＋relation 判定）。
  */
 export function getPastResults(
   company: string,
   product: string,
   excludeCaseNo: string,
-): ResultRecord[] {
+): PastResultMatch[] {
   const s = loadStore();
-  return Object.values(s.results ?? {}).filter(
-    (r) => r.company === company && r.product === product && r.caseNo !== excludeCaseNo,
-  );
+  return Object.values(s.results ?? {})
+    .filter(
+      (r) => r.caseNo !== excludeCaseNo && (r.product === product || r.company === company),
+    )
+    .map<PastResultMatch>((r) => ({
+      record: r,
+      relation: r.product === product ? "direct" : "same_supplier",
+    }));
 }
 
 // ---- 進捗（最後にいたステップ・m-2） ----

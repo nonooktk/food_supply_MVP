@@ -5,7 +5,8 @@
 - GET  /cases/{case_no}      … 詳細
 - PATCH /cases/{case_no}/status … 状態遷移
 
-テナント境界は get_repo（TenantScopedRepository）で強制する（二層防御の第1層）。
+読み書きとも ``TenantScopedRepository``（get_repo）経由に統一し、テナント境界を強制する
+（§2.8 ルール1・二層防御の第1層）。採番のみ内部ユーティリティ（numbering.py）を例外的に使う。
 """
 
 from __future__ import annotations
@@ -13,23 +14,14 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, Query
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
-from app.api.deps import (
-    get_current_tenant,
-    get_current_user,
-    get_repo,
-    get_session,
-    get_trace_id,
-    idempotency_store,
-)
+from app.api.deps import get_current_user, get_repo, get_trace_id, idempotency_store
 from app.db import models as m
 from app.db.numbering import SequentialNumberingService
 from app.db.repository import TenantScopedRepository
 from app.errors import ApiProblem
 from app.observability.logging import emit_audit
-from app.schemas import CaseCreateInput, CaseDetail, CaseListResult, CaseStatus, CaseStatusUpdate
+from app.schemas import CaseCreateInput, CaseDetail, CaseListResult, CaseStatusUpdate
 from app.services.case_view import build_case_detail, load_case, ui_status_to_db
 
 router = APIRouter(tags=["cases"])
@@ -38,21 +30,18 @@ _numbering = SequentialNumberingService()
 
 @router.get("/cases", response_model=CaseListResult)
 def list_cases(
-    session: Session = Depends(get_session),
-    tenant_id: str = Depends(get_current_tenant),
+    repo: TenantScopedRepository = Depends(get_repo),
     keyword: Optional[str] = Query(default=None),
     status: Optional[str] = Query(default=None),
 ) -> CaseListResult:
     """案件一覧を返す（保存時期の新しい順）。keyword / status で絞り込む。"""
-    cases = session.execute(
-        select(m.NegotiationCase)
-        .where(m.NegotiationCase.tenant_id == tenant_id)
-        .order_by(m.NegotiationCase.updated_at.desc())
-    ).scalars().all()
+    cases = repo.list(m.NegotiationCase)
+    # 保存時期の新しい順（updated_at 降順）。
+    cases.sort(key=lambda c: c.updated_at or 0, reverse=True)
 
-    items: list[CaseDetail] = [build_case_detail(session, c) for c in cases]
+    items: list[CaseDetail] = [build_case_detail(repo, c) for c in cases]
 
-    # DB 非依存の絞り込み（表示名を含めて検索するためアプリ層で実施）。
+    # 表示名を含めた絞り込みはアプリ層で実施（company/product は結合後の表示名）。
     if status and status != "all":
         items = [it for it in items if it.status == status]
     kw = (keyword or "").strip()
@@ -99,7 +88,6 @@ def _resolve_spec(repo: TenantScopedRepository, product_name: str) -> int:
 @router.post("/cases", response_model=CaseDetail, status_code=201)
 def create_case(
     body: CaseCreateInput,
-    session: Session = Depends(get_session),
     repo: TenantScopedRepository = Depends(get_repo),
     user_id: str = Depends(get_current_user),
     trace_id: str = Depends(get_trace_id),
@@ -116,7 +104,8 @@ def create_case(
 
     supplier_id = _resolve_supplier(repo, body.company.strip())
     spec_id = _resolve_spec(repo, body.product.strip())
-    case_no = _numbering.next_case_no(session, tenant_id)
+    # 採番は内部ユーティリティ（tenant 必須・Repository 外の例外。numbering.py の説明参照）。
+    case_no = _numbering.next_case_no(repo.session, tenant_id)
 
     case = repo.add(
         m.NegotiationCase(
@@ -130,9 +119,9 @@ def create_case(
             data_origin="アプリ登録",
         )
     )
-    session.flush()
-    detail = build_case_detail(session, case)
-    session.commit()
+    repo.session.flush()
+    detail = build_case_detail(repo, case)
+    repo.session.commit()
 
     emit_audit("case.create", tenant_id=tenant_id, user_id=user_id, trace_id=trace_id, case_no=case_no)
 
@@ -144,33 +133,31 @@ def create_case(
 @router.get("/cases/{case_no}", response_model=CaseDetail)
 def get_case(
     case_no: str,
-    session: Session = Depends(get_session),
-    tenant_id: str = Depends(get_current_tenant),
+    repo: TenantScopedRepository = Depends(get_repo),
 ) -> CaseDetail:
     """案件詳細を返す。"""
-    case = load_case(session, tenant_id, case_no)
+    case = load_case(repo, case_no)
     if case is None:
         raise ApiProblem(404, "案件が見つかりません", detail=f"{case_no} は存在しません。")
-    return build_case_detail(session, case)
+    return build_case_detail(repo, case)
 
 
 @router.patch("/cases/{case_no}/status", response_model=CaseDetail)
 def update_status(
     case_no: str,
     body: CaseStatusUpdate,
-    session: Session = Depends(get_session),
     repo: TenantScopedRepository = Depends(get_repo),
     user_id: str = Depends(get_current_user),
     trace_id: str = Depends(get_trace_id),
 ) -> CaseDetail:
     """案件の状態を遷移させる（交渉前 → 交渉中 → 完了）。"""
-    case = load_case(session, repo.tenant_id, case_no)
+    case = load_case(repo, case_no)
     if case is None:
         raise ApiProblem(404, "案件が見つかりません", detail=f"{case_no} は存在しません。")
     case.status = ui_status_to_db(body.status)
-    session.flush()
-    detail = build_case_detail(session, case)
-    session.commit()
+    repo.session.flush()
+    detail = build_case_detail(repo, case)
+    repo.session.commit()
     emit_audit(
         "case.status_change",
         tenant_id=repo.tenant_id,

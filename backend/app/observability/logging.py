@@ -42,3 +42,25 @@ def emit_audit(
         trace_id=trace_id,
         **fields,
     )
+
+
+def emit_error(
+    action: str,
+    *,
+    tenant_id: str,
+    trace_id: str = "",
+    error: str = "",
+    **fields: object,
+) -> None:
+    """想定外エラーを構造化ログに記録する（degrade 前の記録用）。
+
+    秘匿情報を含めないため、例外の型・要約のみを ``error`` に渡すこと。
+    """
+    _logger.error(
+        "error",
+        action=action,
+        tenant_id=tenant_id,
+        trace_id=trace_id,
+        error=error,
+        **fields,
+    )

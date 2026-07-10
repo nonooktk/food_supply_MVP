@@ -156,28 +156,32 @@ class MockApi implements Api {
     await delay(900);
     const staticItems = MOCK_PAST_CASES[caseNo] ?? [];
 
-    // 判断継承（BR-10）: ⑤結果記録で決着済みの「同一商材×取引先」案件を過去経緯として合流する。
-    // これにより、決着結果を記録した後に作成した新案件の②情報収集にその結果が現れる。
+    // 判断継承（BR-10）: ⑤結果記録で決着済みの関連案件を過去経緯として合流する。
+    // backend（related_past_results）と同じ意味論: 商材キー一致=direct（relation なし）、
+    // 取引先キー一致（別商材）=same_supplier（グラフ補完）。
     const self = store.getCases().find((c) => c.caseNo === caseNo);
     const dynamic = self
-      ? store.getPastResults(self.company, self.product, caseNo).map<PastCase>((r) => ({
-          caseNo: r.caseNo,
-          company: r.company,
-          product: r.product,
-          period: r.period,
-          settledPrice: r.settledPrice,
-          relation: undefined,
-          citations: [
-            {
-              caseNo: r.caseNo,
-              company: r.company,
-              product: r.product,
-              snippet: `決着 ¥${r.settledPrice.toLocaleString("ja-JP")}/kg（見積比 ${
-                r.quoteDiffPct >= 0 ? "+" : ""
-              }${r.quoteDiffPct}%）。${r.note ? r.note : "所感の記録なし。"}`,
-            },
-          ],
-        }))
+      ? store.getPastResults(self.company, self.product, caseNo).map<PastCase>((match) => {
+          const r = match.record;
+          return {
+            caseNo: r.caseNo,
+            company: r.company,
+            product: r.product,
+            period: r.period,
+            settledPrice: r.settledPrice,
+            relation: match.relation === "direct" ? undefined : "same_supplier",
+            citations: [
+              {
+                caseNo: r.caseNo,
+                company: r.company,
+                product: r.product,
+                snippet: `決着 ¥${r.settledPrice.toLocaleString("ja-JP")}/kg（見積比 ${
+                  r.quoteDiffPct >= 0 ? "+" : ""
+                }${r.quoteDiffPct}%）。${r.note ? r.note : "所感の記録なし。"}`,
+              },
+            ],
+          };
+        })
       : [];
 
     const items = [...dynamic, ...staticItems];
