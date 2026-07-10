@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* ふりぃらじかるず 購買交渉支援アプリ — グローバルスタイル
+ * デザインガイド §1.2 カラートークン / §1.3 タイポグラフィ に準拠。
+ * Tailwind 標準パレット（blue/slate/emerald/amber/red/indigo）をそのまま使う。
+ * 業務アプリのためライトモード最適化（背景 slate-50・カード white）。 */
+
+@theme inline {
+  /* 本文フォント: Noto Sans JP を第一候補にシステムフォントへフォールバック（§1.3）。
+   * ビルド時のネットワーク依存を避けるため、Web フォント読込ではなくフォントスタックで指定。 */
+  --font-sans: "Noto Sans JP", "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Yu Gothic", "Meiryo", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  /* Surface: slate-50 / Text 本文: slate-900（§1.2） */
+  background-color: var(--color-slate-50);
+  color: var(--color-slate-900);
+  font-family: var(--font-sans);
+}
+
+/* 数値は等幅数字（§1.3）。tabular-nums ユーティリティと併せて明示クラスも用意。 */
+.num {
+  font-variant-numeric: tabular-nums;
+}

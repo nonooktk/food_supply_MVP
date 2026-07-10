@@ -1,0 +1,108 @@
+// ドメイン型定義
+// 要件定義書 v3 §2（F-01/02/04/05）・デザインガイド §3〜§4 に対応。
+// バックエンド API（ポリゴン並行実装中）と形を合わせるための共通の型置き場。
+
+/** 案件ステータス（デザインガイド §4.6 StatusBadge） */
+export type CaseStatus = "before" | "negotiating" | "done";
+
+/** 案件ワークスペースのステップ（デザインガイド §2.2） */
+export type WorkspaceStep = "collect" | "lines" | "strategy" | "result";
+
+/** 認証済みユーザー（モック認証。Entra は Sprint 2） */
+export interface AuthUser {
+  tenantId: string;
+  userId: string;
+  displayName: string;
+  role: "member" | "admin";
+}
+
+/** 案件一覧の1行（デザインガイド §3.1 DataTable） */
+export interface CaseSummary {
+  caseNo: string; // 例: "No.500001"
+  company: string; // 取引先企業
+  product: string; // 商材（規格含む表示名）
+  status: CaseStatus;
+  updatedAt: string; // "07/09" などの表示用
+  assignee: string; // 担当者名
+}
+
+/** 案件作成フォームの入力（デザインガイド §3.1 作成モーダル / FR-01） */
+export interface CaseCreateInput {
+  company: string;
+  product: string;
+  quotedPrice: number; // 提出見積（円/kg）
+  targetPeriod: string; // 交渉時期
+}
+
+/** 案件詳細（ワークスペースのヘッダー表示に使用） */
+export interface CaseDetail extends CaseSummary {
+  quotedPrice: number;
+  targetPeriod: string;
+  currentStep: WorkspaceStep; // 最後にいたステップ
+}
+
+/** 相場情報（デザインガイド §3.2 相場情報パネル / F-02） */
+export interface RateInfo {
+  latestPrice: number; // 直近相場（円/kg）
+  unit: string; // "円/kg"
+  normalizedCount: number; // CSV取込で正規化した件数
+  note: string; // 補足（表記ゆれ補正など）
+}
+
+/** 過去経緯の引用元（デザインガイド §4.4 CitationBadge / KRE RetrieveResult.citations 相当） */
+export interface Citation {
+  caseNo: string;
+  company: string;
+  product: string;
+  snippet: string; // 該当箇所の要約
+}
+
+/** 過去案件1件（デザインガイド §3.2 PastCaseList / F-03・KRE スタブ相当） */
+export interface PastCase {
+  caseNo: string;
+  company: string;
+  product: string;
+  period: string; // "2026Q1" など
+  settledPrice: number; // 決着単価（円/kg）
+  citations: Citation[];
+  relation?: "same_supplier" | "same_reason"; // グラフ補完の種別（§5.4）
+}
+
+/** 過去経緯パネルの状態（部分エラー・空対応。デザインガイド §3.2） */
+export interface PastCaseResult {
+  state: "ready" | "empty" | "error";
+  items: PastCase[];
+}
+
+/** 自社計画（デザインガイド §3.2 CompanyPlanForm / F-04） */
+export interface CompanyPlan {
+  targetCostRate: number; // 目標原価率（%）
+  planPrice: number; // 計画仕入単価（円/kg）
+  monthlyVolume: number; // 月次発注量（kg）
+  ceilingPrice: number; // 許容上限（円/kg）
+}
+
+/** 3ラインの種別（デザインガイド §4.3 ThreeLineCard） */
+export type LineType = "target" | "landing" | "walkaway";
+
+/** 3ラインの1本 */
+export interface ThreeLine {
+  type: LineType;
+  value: number; // 円/kg
+  autoValue: number; // 自動算出値（手修正前の値。差分表示・リセット用）
+  isEdited: boolean; // 手修正済みか
+  editReason?: string; // 手修正時は必須（デザインガイド §3.3）
+}
+
+/** 年間影響額試算（デザインガイド §3.3 AnnualImpactSummary） */
+export interface AnnualImpact {
+  targetYen: number; // 目標達成時の対計画・年間影響額（円）
+  landingYen: number; // 着地時の対計画・年間影響額（円）
+}
+
+/** 3ライン算出結果 */
+export interface ThreeLineResult {
+  lines: ThreeLine[];
+  impact: AnnualImpact;
+  ready: boolean; // 算出に必要な入力（②自社計画等）が揃っているか
+}
