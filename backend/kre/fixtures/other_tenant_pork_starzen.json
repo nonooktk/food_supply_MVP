@@ -1,0 +1,53 @@
+{
+  "tenant_id": "t-acme",
+  "description": "越境ゼロ検証用の別テナント fixture（t-acme）。豚バラ肉（デンマーク産・冷凍）× スターゼンの値上げ要請シナリオ。全 id を 't-acme:' 接頭辞にしてあり、t-frd の検索要求に対してこのデータが1件も混入しないことを契約テストで検証する（受け入れ条件(4)・§10.5）。",
+  "request": {
+    "tenant_id": "t-acme",
+    "query": {
+      "free_text": "豚バラ肉 デンマーク産 スターゼン 値上げ要請 為替"
+    },
+    "filters": {
+      "supplier_id": 44
+    }
+  },
+  "result": {
+    "hits": [
+      {
+        "id": "t-acme:case:No.700088",
+        "source": "case",
+        "score": 0.88,
+        "snippet": "豚バラ肉（デンマーク産・冷凍）／スターゼンの2025-08値上げ要請。主張理由=為替変動(RC-05)。",
+        "ref": {"table": "negotiation_cases", "pk": "No.700088"}
+      },
+      {
+        "id": "t-acme:result:15003",
+        "source": "result",
+        "score": 0.80,
+        "snippet": "同案件の決着: 480→498 円/kg、目標達成度 62%。認めた理由=RC-05。",
+        "ref": {"table": "negotiation_results", "pk": "15003"}
+      }
+    ],
+    "graph_context": {
+      "nodes": [
+        {"id": "t-acme:sup:44", "type": "supplier", "label": "スターゼン"},
+        {"id": "t-acme:spec:812", "type": "product_spec", "label": "豚バラ肉／デンマーク／冷凍"},
+        {"id": "t-acme:rc:RC-05", "type": "rate_change_reason", "label": "為替変動"}
+      ],
+      "edges": [
+        {"src": "t-acme:case:No.700088", "dst": "t-acme:sup:44", "relation": "取引先"},
+        {"src": "t-acme:case:No.700088", "dst": "t-acme:spec:812", "relation": "対象商材"},
+        {"src": "t-acme:case:No.700088", "dst": "t-acme:rc:RC-05", "relation": "主張変動理由"}
+      ],
+      "summary_text": "スターゼンの豚バラ肉は為替変動(RC-05)を理由に値上げ要請。円安局面で輸入豚肉の値上げ事例が増加。"
+    },
+    "citations": [
+      {
+        "id": "t-acme:case:No.700088",
+        "label": "No.700088 豚バラ肉 値上げ要請(2025-08・スターゼン)",
+        "ref": {"table": "negotiation_cases", "pk": "No.700088"}
+      }
+    ],
+    "engine_version": "kre-0.1.0",
+    "config_version": "retrieval-2026-07-09"
+  }
+}

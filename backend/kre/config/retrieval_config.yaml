@@ -1,0 +1,48 @@
+# ==============================================================================
+# retrieval_config.yaml — KRE 検索・グラフの調整ノブ（設計書 draft-v3 §11）
+#
+# 別担当者が本体コードに触れずに検索・グラフの挙動をチューニングするための設定。
+# Key Vault / 環境変数で上書き可（本骨格ではファイル読込のみ。上書き受け口は loader.py）。
+# `config_version` で版管理し、RetrieveResult に反映される（再現性の担保・§11）。
+#
+# 既定値は暫定案 [提案] であり、契約テスト（§10.5）で調整する。
+# 「誰が触るか」の目安は §11 の表を参照。
+# ==============================================================================
+
+# 設定版（model_versions と連携可。RetrieveResult.config_version に反映）。
+config_version: retrieval-2026-07-09
+
+# ----- 検索（AI Search ハイブリッド）: 検索チューニング担当 -----
+search:
+  hybrid_weight: 0.5   # 0..1。キーワードBM25 ⇔ 意味ベクトルの配合比
+  top_k: 10            # 返却ヒット件数の上限
+  min_score: 0.2       # 足切りスコア（ノイズ除去）
+
+# ----- グラフ補完（GraphRAG・§4.1）: 検索チューニング担当 -----
+graph:
+  enabled: true        # グラフ補完の有効/無効
+  depth: 1             # 隣接展開の深さ（MVPは1）
+  max_neighbors: 20    # 1ノードあたり展開する隣接数の上限
+  # 展開対象ノード種別（§4.1）
+  node_types: [product_spec, supplier, case, rate_change_reason, origin]
+  # 展開対象エッジ種別（§4.1）
+  edge_types: [対象商材, 取引先, 主張変動理由, 認めた変動理由, 産地, 同一商材]
+
+# ----- 埋め込み（1536次元）: KRE実装担当 -----
+embedding:
+  model: text-embedding-3-small
+
+# ----- 再ランキング: 検索チューニング担当 -----
+rerank:
+  enabled: false
+
+# ----- スコアリング加点/減衰: 検索チューニング担当 -----
+scoring:
+  freshness_decay: 0.1       # 新しい案件を優先する時間減衰
+  same_supplier_boost: 1.2   # 同一取引先ヒットのスコア加点
+  same_reason_boost: 1.15    # 同一変動理由ヒットのスコア加点
+
+# ----- 整合（索引・グラフの一貫性維持トリガー）: 運用担当 -----
+sync:
+  mode: on_write   # {on_write, scheduled}
+  interval: null   # scheduled 時のみ（例 "15m"）

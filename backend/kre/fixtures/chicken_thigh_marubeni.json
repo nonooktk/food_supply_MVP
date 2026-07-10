@@ -1,0 +1,55 @@
+{
+  "tenant_id": "t-frd",
+  "description": "代表クエリ fixture（設計書 §10.4 基準）。鶏もも肉（ブラジル産）× 丸紅畜産の値上げ要請シナリオ。検索ヒット（案件＋決着）に加え、グラフ補完で『同一取引先の別商材（鶏むね肉）』と『同一変動理由の他社事例（RC-03 飼料価格高騰）』を供給し、Citation を1件返す。契約テストの基準データ（受け入れ条件(3)）。",
+  "request": {
+    "tenant_id": "t-frd",
+    "query": {
+      "free_text": "鶏もも肉 ブラジル産 丸紅畜産 値上げ要請 過去の経緯と相場"
+    },
+    "filters": {
+      "supplier_id": 12
+    }
+  },
+  "result": {
+    "hits": [
+      {
+        "id": "t-frd:case:No.500023",
+        "source": "case",
+        "score": 0.91,
+        "snippet": "鶏もも肉（ブラジル産・チルド）／丸紅畜産の2025-07値上げ要請。主張理由=飼料価格高騰(RC-03)。",
+        "ref": {"table": "negotiation_cases", "pk": "No.500023"}
+      },
+      {
+        "id": "t-frd:result:9021",
+        "source": "result",
+        "score": 0.84,
+        "snippet": "同案件の決着: 620→635 円/kg、目標達成度 78%。認めた理由=RC-03。",
+        "ref": {"table": "negotiation_results", "pk": "9021"}
+      }
+    ],
+    "graph_context": {
+      "nodes": [
+        {"id": "t-frd:sup:12", "type": "supplier", "label": "丸紅畜産"},
+        {"id": "t-frd:spec:305", "type": "product_spec", "label": "鶏もも肉／ブラジル／チルド"},
+        {"id": "t-frd:spec:306", "type": "product_spec", "label": "鶏むね肉／ブラジル／チルド"},
+        {"id": "t-frd:rc:RC-03", "type": "rate_change_reason", "label": "飼料価格高騰"}
+      ],
+      "edges": [
+        {"src": "t-frd:case:No.500023", "dst": "t-frd:sup:12", "relation": "取引先"},
+        {"src": "t-frd:case:No.500023", "dst": "t-frd:spec:305", "relation": "対象商材"},
+        {"src": "t-frd:case:No.500023", "dst": "t-frd:rc:RC-03", "relation": "主張変動理由"},
+        {"src": "t-frd:case:No.500031", "dst": "t-frd:spec:306", "relation": "対象商材"}
+      ],
+      "summary_text": "丸紅畜産の鶏もも肉は飼料高騰(RC-03)を理由に反復値上げ。同一取引先の別商材（鶏むね肉）でも同時期に値上げ要請あり。他社でも RC-03 起因の値上げ事例が複数。"
+    },
+    "citations": [
+      {
+        "id": "t-frd:case:No.500023",
+        "label": "No.500023 鶏もも肉 値上げ要請(2025-07・丸紅畜産)",
+        "ref": {"table": "negotiation_cases", "pk": "No.500023"}
+      }
+    ],
+    "engine_version": "kre-0.1.0",
+    "config_version": "retrieval-2026-07-09"
+  }
+}
