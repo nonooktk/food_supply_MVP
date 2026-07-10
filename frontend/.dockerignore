@@ -1,0 +1,24 @@
+# frontend イメージのビルドコンテキストから除外するもの（COPY . . の対象を絞る）。
+
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# 秘匿・ローカル環境（NEXT_PUBLIC_* はビルド ARG で渡す）
+.env
+.env.*
+!.env.example
+
+# ログ・キャッシュ
+npm-debug.log*
+yarn-error.log*
+.turbo/
+*.tsbuildinfo
+
+# その他
+.git
+.DS_Store
+Dockerfile
+.dockerignore

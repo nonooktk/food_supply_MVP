@@ -1,0 +1,33 @@
+# backend イメージのビルドコンテキストから除外するもの。
+# 秘匿値・ローカル生成物・テスト・キャッシュを外し、グラフJSONは起動時に再生成させる。
+
+# 仮想環境・キャッシュ
+.venv/
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# テスト（本番イメージに不要）
+tests/
+pytest.ini
+
+# 秘匿値（.env は絶対にイメージへ入れない。値はコンテナ env/secrets で注入）
+.env
+.env.*
+!.env.example
+
+# ローカル DB / SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# KRE グラフJSON（gitignore 済みのローカル生成物。起動時 build_index --graph-only で再生成）
+kre/graph/data/*.json
+
+# その他
+.git
+.DS_Store

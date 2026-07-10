@@ -350,6 +350,12 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Azure 非接続。件数・サンプルのみ表示")
     parser.add_argument("--tenant", default=None, help="対象テナント（省略時は全テナント）")
     parser.add_argument("--graph-dir", default=str(DEFAULT_GRAPH_DIR), help="グラフ JSON の保存先")
+    parser.add_argument(
+        "--graph-only",
+        action="store_true",
+        help="グラフ JSON のみ生成・保存し、AI Search へは投入しない"
+        "（起動時のローカルグラフ再生成用。AI Search インデックスは既存を使う。埋め込み課金なし）",
+    )
     args = parser.parse_args()
 
     from app.db.database import get_sessionmaker
@@ -377,6 +383,11 @@ def main() -> int:
         session.close()
 
     logger.info("ドキュメント総数: %d", len(all_docs))
+
+    if args.graph_only:
+        # グラフ JSON はループ内で保存済み。AI Search 投入（埋め込み・アップロード）はスキップする。
+        logger.info("--graph-only: グラフ JSON のみ生成しました（AI Search 投入はスキップ）。")
+        return 0
 
     if args.dry_run:
         logger.info("--dry-run: Azure へは投入しません。サンプル1件を表示します。")
