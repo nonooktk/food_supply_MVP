@@ -37,6 +37,43 @@ def _ctx() -> StrategyContext:
     )
 
 
+def test_prompts_forbid_fabricated_numbers() -> None:
+    """数値ガード（統合テスト Minor）: 価格に加え数量・割合等も事実にないものは書かない旨が
+    ポイント/シナリオ両プロンプトに明記されていること。"""
+    from app.llm.prompts import POINTS_SYSTEM_PROMPT, SCENARIO_SYSTEM_PROMPT
+
+    for prompt in (POINTS_SYSTEM_PROMPT, SCENARIO_SYSTEM_PROMPT):
+        assert "決めない" in prompt  # 価格ガード（既存）
+        assert "数量" in prompt and "割合" in prompt  # 数値全般のガード（追加）
+        assert "事実にない数値" in prompt
+
+
+def test_generated_output_only_uses_context_numbers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """生成検証（モック）: 生成物に含まれる数値がコンテキストの数値集合に収まることを固定する。"""
+    import re
+
+    ctx = _ctx()
+    allowed = {"585", "600", "615", "609", "216000", "595"}
+
+    def _fake(system_prompt, user_prompt, label):  # noqa: ANN001
+        if label == "scenario":
+            return {"scenario": "目標¥585から着地¥600へ寄せ、撤退¥615超は持ち帰る。"}
+        return {
+            "points": [
+                {"text": "目標¥585を起点に交渉（過去決着¥609を根拠）。", "citation_case_nos": ["No.123455-a"]},
+                {"text": "年間216000kgの数量を背景に着地¥600を狙う。", "citation_case_nos": []},
+                {"text": "撤退¥615を超えたら持ち帰る。", "citation_case_nos": []},
+            ]
+        }
+
+    monkeypatch.setattr("app.llm.strategy_generator._call_json", _fake)
+    out = generate_strategy(ctx)
+    texts = [p["text"] for p in out["points"]] + [out["scenario"]]
+    for t in texts:
+        for num in re.findall(r"\d[\d,\.]*", t):
+            assert num.replace(",", "") in allowed, f"事実にない数値: {num!r}（text={t!r}）"
+
+
 def test_build_context_text_contains_facts() -> None:
     text = build_context_text(_ctx())
     assert "丸紅畜産" in text

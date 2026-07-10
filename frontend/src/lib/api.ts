@@ -11,6 +11,7 @@ import {
   MOCK_CREDENTIAL,
   MOCK_PAST_CASES,
   MOCK_RATES,
+  MOCK_REASON_TAGS,
 } from "@/lib/mock/data";
 import * as store from "@/lib/store";
 import type {
@@ -22,6 +23,9 @@ import type {
   PastCase,
   PastCaseResult,
   RateInfo,
+  ReasonTag,
+  ResultInput,
+  ResultRecord,
   StrategyDraft,
   ThreeLine,
   ThreeLineResult,
@@ -56,6 +60,10 @@ export interface Api {
   generateStrategy(caseNo: string): Promise<StrategyDraft>;
   getStrategyDraft(caseNo: string): Promise<StrategyDraft | null>;
   saveStrategyDraft(caseNo: string, draft: StrategyDraft): Promise<void>;
+  // 画面⑤ 結果記録（FR-11/12/13）。workspaceApi のシグネチャに合わせる。
+  getReasonTags(): Promise<ReasonTag[]>;
+  getResult(caseNo: string): Promise<ResultRecord | null>;
+  saveResult(caseNo: string, input: ResultInput): Promise<ResultRecord>;
 }
 
 /** ネットワーク遅延を模した待機（モックのローディング表示を確認できるように） */
@@ -312,6 +320,51 @@ class MockApi implements Api {
     store.setStrategy(caseNo, draft); // 生成物を永続化（バックエンドの generate も保存する）
     return draft;
   }
+
+  // ---- 画面⑤ 結果記録（FR-11/12/13） ----
+  async getReasonTags(): Promise<ReasonTag[]> {
+    await delay(100);
+    return MOCK_REASON_TAGS;
+  }
+
+  async getResult(caseNo: string): Promise<ResultRecord | null> {
+    await delay(150);
+    return store.getResult(caseNo);
+  }
+
+  async saveResult(caseNo: string, input: ResultInput): Promise<ResultRecord> {
+    await delay(400);
+    const [detail, lines] = await Promise.all([this.getCase(caseNo), this.getThreeLines(caseNo)]);
+    const target = lines.lines.find((l) => l.type === "target")?.value ?? detail.quotedPrice;
+    const walkaway = lines.lines.find((l) => l.type === "walkaway")?.value ?? detail.quotedPrice;
+    // 見積比・目標達成度（バックエンド results.py と同一式）。
+    const quoteDiffPct =
+      detail.quotedPrice > 0
+        ? Math.round(((input.settledPrice - detail.quotedPrice) / detail.quotedPrice) * 1000) / 10
+        : 0;
+    const achievementPct =
+      walkaway <= target
+        ? input.settledPrice <= target
+          ? 100
+          : 0
+        : Math.max(
+            0,
+            Math.min(100, Math.round(((walkaway - input.settledPrice) / (walkaway - target)) * 100)),
+          );
+    const record: ResultRecord = {
+      ...input,
+      caseNo,
+      company: detail.company,
+      product: detail.product,
+      period: detail.targetPeriod,
+      quoteDiffPct,
+      achievementPct,
+      savedAt: new Date().toISOString(),
+    };
+    store.setResult(caseNo, record);
+    store.setCaseStatus(caseNo, "done"); // 案件を完了化（BR-10 で新案件の過去経緯に現れる）
+    return record;
+  }
 }
 
 /** ---- 実 API 実装（NEXT_PUBLIC_USE_MOCK=false）----
@@ -430,6 +483,22 @@ class RealApi implements Api {
     return this.req<void>(`/cases/${encodeURIComponent(caseNo)}/strategy`, {
       method: "PUT",
       body: JSON.stringify(draft),
+    });
+  }
+  getReasonTags(): Promise<ReasonTag[]> {
+    return this.req<ReasonTag[]>("/reasons");
+  }
+  getResult(caseNo: string): Promise<ResultRecord | null> {
+    return this.req<ResultRecord | null>(`/cases/${encodeURIComponent(caseNo)}/result`);
+  }
+  saveResult(caseNo: string, input: ResultInput): Promise<ResultRecord> {
+    // 冪等キーで二重記録を防ぐ。見積比・目標達成度はサーバー側で算出される。
+    const idempotencyKey =
+      typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
+    return this.req<ResultRecord>(`/cases/${encodeURIComponent(caseNo)}/result`, {
+      method: "POST",
+      body: JSON.stringify(input),
+      headers: { "Idempotency-Key": idempotencyKey },
     });
   }
 }

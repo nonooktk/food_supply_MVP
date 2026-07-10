@@ -156,3 +156,42 @@ class StrategyPoint(CamelModel):
 class StrategyDraft(CamelModel):
     points: list[StrategyPoint] = Field(default_factory=list)
     scenario: str = ""
+
+
+# ---- 結果記録（画面⑤・FR-11/12/13） ----------------------------------------
+ReasonDirection = Literal["up", "down", "both"]
+
+
+class ReasonTag(CamelModel):
+    """変動理由マスタ（RC-01〜10・共有参照）。"""
+
+    code: str
+    label: str
+    direction: ReasonDirection
+
+
+class ResultInput(CamelModel):
+    """結果記録の入力（§3.5 ResultForm）。"""
+
+    settled_price: float
+    delivery_timing: str = ""
+    payment_terms: str = ""
+    reason_codes: list[str] = Field(default_factory=list)  # 決着理由タグ（RC-xx・複数選択）
+    note: str = ""
+
+
+class ResultRecord(CamelModel):
+    """保存済みの結果記録（自動計算値＝見積比/目標達成度を含む）。"""
+
+    settled_price: float
+    delivery_timing: str
+    payment_terms: str
+    reason_codes: list[str]
+    note: str
+    quote_diff_pct: float  # 見積比（%。マイナスは見積より安く決着）
+    achievement_pct: float  # 目標達成度（%）
+    case_no: str
+    company: str
+    product: str
+    period: str
+    saved_at: str
