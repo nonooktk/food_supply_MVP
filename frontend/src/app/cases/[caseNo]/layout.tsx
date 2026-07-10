@@ -11,6 +11,8 @@ import { AuthGuard } from "@/components/AppChrome";
 import { StepIndicator } from "@/components/ui/StepIndicator";
 import { Spinner } from "@/components/ui/Spinner";
 import { api } from "@/lib/api";
+import { isPlanReady } from "@/lib/calc";
+import * as store from "@/lib/store";
 import type { CaseDetail, WorkspaceStep } from "@/lib/types";
 
 function stepFromPath(pathname: string): WorkspaceStep {
@@ -18,6 +20,12 @@ function stepFromPath(pathname: string): WorkspaceStep {
   if (pathname.endsWith("/strategy")) return "strategy";
   if (pathname.endsWith("/result")) return "result";
   return "collect";
+}
+
+/** 明示的なステップセグメント（/collect 等）を含むか。
+ *  入口 /cases/[caseNo]（ステップ無し）では「最後にいたステップ」を上書きしない（m-2）。 */
+function hasExplicitStep(pathname: string): boolean {
+  return /\/(collect|lines|strategy|result)$/.test(pathname);
 }
 
 export default function WorkspaceLayout({ children }: { children: ReactNode }) {
@@ -36,6 +44,7 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
 
   const [detail, setDetail] = useState<CaseDetail | null>(null);
   const [error, setError] = useState(false);
+  const [reached, setReached] = useState<WorkspaceStep[]>(["collect"]);
 
   useEffect(() => {
     let alive = true;
@@ -47,6 +56,25 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
       alive = false;
     };
   }, [caseNo]);
+
+  // m-2: 到達済みステップを案件の進捗（自社計画・作戦シート・結果の有無）から導出する。
+  // 現在ステップの変化ごとに再評価し、あわせて「最後にいたステップ」を記録する。
+  useEffect(() => {
+    const planReady = isPlanReady(store.getPlan(caseNo));
+    const hasStrategy = store.getStrategy(caseNo) !== null;
+    const hasResult = store.getResult(caseNo) !== null;
+    const r: WorkspaceStep[] = ["collect"];
+    if (planReady) r.push("lines", "strategy");
+    if (hasStrategy || hasResult) r.push("result");
+    // 現在ステップは常に到達済みとして含める（直接遷移時の整合）。
+    if (!r.includes(current)) r.push(current);
+    // 進捗（外部ストア）からの到達ステップ導出のための意図的な setState。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setReached(r);
+    // 「最後にいたステップ」は明示的なステップ URL のときだけ記録する。
+    // 入口 /cases/[caseNo]（ステップ無し）で collect に上書きしてしまうのを防ぐ（m-2）。
+    if (hasExplicitStep(pathname)) store.setLastStep(caseNo, current);
+  }, [caseNo, current, pathname]);
 
   return (
     <div className="min-h-screen">
@@ -77,7 +105,7 @@ function WorkspaceShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="mt-3">
-            <StepIndicator caseNo={caseNo} current={current} reached={["collect", "lines"]} />
+            <StepIndicator caseNo={caseNo} current={current} reached={reached} />
           </div>
         </div>
       </header>

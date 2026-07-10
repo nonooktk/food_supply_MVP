@@ -9,6 +9,7 @@ import type {
   CompanyPlan,
   PastCase,
   RateInfo,
+  ReasonTag,
 } from "@/lib/types";
 
 /** 案件一覧の初期データ（デザインガイド §3.1 のサンプル行を踏襲） */
@@ -195,3 +196,18 @@ export const MOCK_AUTH_USER = {
 export function flattenCitations(cases: PastCase[]): Citation[] {
   return cases.flatMap((c) => c.citations);
 }
+
+/** 変動理由マスタ（RC-01〜10。デザインガイド §3.5 ReasonTagSelector）。
+ *  方向は色ではなく矢印記号（↑上げ要因 / ↓下げ要因 / ±両方向）で示す。 */
+export const MOCK_REASON_TAGS: ReasonTag[] = [
+  { code: "RC-01", label: "為替変動", direction: "up" },
+  { code: "RC-02", label: "需給逼迫", direction: "up" },
+  { code: "RC-03", label: "原油・燃料高", direction: "up" },
+  { code: "RC-04", label: "長期契約", direction: "down" },
+  { code: "RC-05", label: "数量拡大", direction: "down" },
+  { code: "RC-06", label: "相見積・競合提示", direction: "down" },
+  { code: "RC-07", label: "品質・規格調整", direction: "both" },
+  { code: "RC-08", label: "季節・天候要因", direction: "both" },
+  { code: "RC-09", label: "在庫・生産調整", direction: "both" },
+  { code: "RC-10", label: "為替安定・円高", direction: "down" },
+];

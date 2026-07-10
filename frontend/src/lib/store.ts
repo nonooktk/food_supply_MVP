@@ -9,15 +9,27 @@ import {
   MOCK_CASE_DETAILS,
   MOCK_PLANS,
 } from "@/lib/mock/data";
-import type { CaseSummary, CompanyPlan, ThreeLine } from "@/lib/types";
+import type {
+  CaseStatus,
+  CaseSummary,
+  CompanyPlan,
+  ResultRecord,
+  StrategyDraft,
+  ThreeLine,
+  WorkspaceStep,
+} from "@/lib/types";
 
-const KEY = "freeradicals.mockstore.v1";
+// スキーマ拡張のため v2 にバージョンを上げる（旧 v1 の破損/欠損キーを避ける）。
+const KEY = "freeradicals.mockstore.v2";
 
 interface StoreShape {
   cases: CaseSummary[];
   caseExtra: Record<string, { quotedPrice: number; targetPeriod: string }>;
   plans: Record<string, CompanyPlan>;
   lines: Record<string, ThreeLine[]>; // 手修正を含む確定ライン
+  strategies: Record<string, StrategyDraft>; // ④作戦シートの保存済み下書き
+  results: Record<string, ResultRecord>; // ⑤結果記録
+  lastStep: Record<string, WorkspaceStep>; // 案件ごとの最後にいたステップ（m-2）
 }
 
 function seed(): StoreShape {
@@ -30,6 +42,9 @@ function seed(): StoreShape {
     caseExtra,
     plans: { ...MOCK_PLANS },
     lines: {},
+    strategies: {},
+    results: {},
+    lastStep: {},
   };
 }
 
@@ -110,4 +125,66 @@ export function nextCaseNo(): string {
     .filter((n) => !Number.isNaN(n));
   const max = nums.length > 0 ? Math.max(...nums) : 500000;
   return `No.${max + 1}`;
+}
+
+// ---- ④ 作戦シート ----
+
+export function getStrategy(caseNo: string): StrategyDraft | null {
+  const s = loadStore();
+  return s.strategies?.[caseNo] ?? null;
+}
+
+export function setStrategy(caseNo: string, draft: StrategyDraft): void {
+  const s = loadStore();
+  s.strategies = { ...(s.strategies ?? {}), [caseNo]: draft };
+  saveStore(s);
+}
+
+// ---- ⑤ 結果記録 ----
+
+export function getResult(caseNo: string): ResultRecord | null {
+  const s = loadStore();
+  return s.results?.[caseNo] ?? null;
+}
+
+export function setResult(caseNo: string, record: ResultRecord): void {
+  const s = loadStore();
+  s.results = { ...(s.results ?? {}), [caseNo]: record };
+  saveStore(s);
+}
+
+/** 案件ステータスを更新する（結果保存時に "done" 化する）。 */
+export function setCaseStatus(caseNo: string, status: CaseStatus): void {
+  const s = loadStore();
+  s.cases = s.cases.map((c) => (c.caseNo === caseNo ? { ...c, status } : c));
+  saveStore(s);
+}
+
+/**
+ * 判断継承（BR-10）: 同一商材×取引先で決着済みの結果を過去経緯候補として返す。
+ * 自分自身の案件は除外する。②情報収集の過去経緯にこの結果が現れる。
+ */
+export function getPastResults(
+  company: string,
+  product: string,
+  excludeCaseNo: string,
+): ResultRecord[] {
+  const s = loadStore();
+  return Object.values(s.results ?? {}).filter(
+    (r) => r.company === company && r.product === product && r.caseNo !== excludeCaseNo,
+  );
+}
+
+// ---- 進捗（最後にいたステップ・m-2） ----
+
+export function getLastStep(caseNo: string): WorkspaceStep {
+  const s = loadStore();
+  return s.lastStep?.[caseNo] ?? "collect";
+}
+
+export function setLastStep(caseNo: string, step: WorkspaceStep): void {
+  const s = loadStore();
+  if ((s.lastStep?.[caseNo] ?? "collect") === step) return; // 変化なしなら書かない
+  s.lastStep = { ...(s.lastStep ?? {}), [caseNo]: step };
+  saveStore(s);
 }

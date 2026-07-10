@@ -15,8 +15,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health
+from app.api import auth, cases, health, lines, plans, rates, search
 from app.config import get_settings
+from app.errors import register_exception_handlers
 
 
 def create_app() -> FastAPI:
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     )
 
     # CORS: フロント（Next.js）の配信元のみを許可する。
+    # モックヘッダー認証（X-Tenant-Id / X-User-Id）と冪等キーを明示的に許可する。
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -38,8 +40,17 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # RFC7807（problem+json）の例外ハンドラを登録する。
+    register_exception_handlers(app)
+
     # ルータ登録。すべての API は /api 配下に置く。
     app.include_router(health.router, prefix="/api")
+    app.include_router(auth.router, prefix="/api")
+    app.include_router(cases.router, prefix="/api")
+    app.include_router(rates.router, prefix="/api")
+    app.include_router(plans.router, prefix="/api")
+    app.include_router(lines.router, prefix="/api")
+    app.include_router(search.router, prefix="/api")
 
     return app
 

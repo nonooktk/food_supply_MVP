@@ -110,3 +110,73 @@ export interface ThreeLineResult {
   impact: AnnualImpact;
   ready: boolean; // 算出に必要な入力（②自社計画等）が揃っているか
 }
+
+// ---- 画面④ 作戦シート（デザインガイド §3.4 / FR-07・FR-08） ----
+
+/** 型帳票（定型フォーマット）に流し込む案件サマリ（§3.4 StrategySheetPreview） */
+export interface PastSummaryItem {
+  caseNo: string;
+  company: string;
+  product: string;
+  period: string;
+  settledPrice: number;
+}
+
+export interface StrategySheet {
+  caseNo: string;
+  company: string;
+  product: string;
+  quotedPrice: number;
+  targetPeriod: string;
+  lines: ThreeLine[]; // 3ライン（③の結果）
+  impact: AnnualImpact; // 年間影響額
+  pastSummary: PastSummaryItem[]; // 過去経緯サマリ
+}
+
+/** AI 生成の交渉ポイント1件（引用元を必ず併設。§4.4） */
+export interface StrategyPoint {
+  text: string;
+  citations: Citation[];
+}
+
+/** AI 下書き（交渉ポイント＋編集可能なシナリオ文。§3.4） */
+export interface StrategyDraft {
+  points: StrategyPoint[];
+  scenario: string;
+}
+
+// ---- 画面⑤ 結果記録（デザインガイド §3.5 / FR-11・FR-12・FR-13） ----
+
+/** 変動理由タグの向き（↑上げ要因 / ↓下げ要因 / ±両方向。色ではなく矢印で示す・§3.5） */
+export type ReasonDirection = "up" | "down" | "both";
+
+/** 変動理由マスタ（RC-01〜10。§3.5 ReasonTagSelector） */
+export interface ReasonTag {
+  code: string;
+  label: string;
+  direction: ReasonDirection;
+}
+
+/** 結果記録の入力（§3.5 ResultForm） */
+export interface ResultInput {
+  settledPrice: number; // 決着単価（円/kg）
+  deliveryTiming: string; // 納入時期
+  paymentTerms: string; // 支払条件
+  reasonCodes: string[]; // 決着理由タグ（複数選択・必須）
+  note: string; // 所感・申し送り
+}
+
+/** 自動計算値（§3.5 AutoCalcField） */
+export interface ResultCalc {
+  quoteDiffPct: number; // 見積比（%。マイナスは見積より安く決着）
+  achievementPct: number; // 目標達成度（%）
+}
+
+/** 保存済みの結果記録 */
+export interface ResultRecord extends ResultInput, ResultCalc {
+  caseNo: string;
+  company: string;
+  product: string;
+  period: string; // 交渉時期（判断継承で過去経緯として参照される）
+  savedAt: string;
+}

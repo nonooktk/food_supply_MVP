@@ -1,17 +1,19 @@
 "use client";
 
-// 案件ワークスペースの入口。最後にいたステップ（MVPは②情報収集）へリダイレクト。
+// 案件ワークスペースの入口。最後にいたステップへリダイレクトする（m-2）。
 import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Spinner } from "@/components/ui/Spinner";
+import * as store from "@/lib/store";
 
 export default function WorkspaceIndex() {
   const params = useParams<{ caseNo: string }>();
   const router = useRouter();
-  const caseNo = params.caseNo;
+  const caseNo = decodeURIComponent(params.caseNo);
 
   useEffect(() => {
-    router.replace(`/cases/${caseNo}/collect`);
+    const last = store.getLastStep(caseNo); // 既定は "collect"
+    router.replace(`/cases/${encodeURIComponent(caseNo)}/${last}`);
   }, [caseNo, router]);
 
   return (

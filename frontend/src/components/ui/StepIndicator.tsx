@@ -18,8 +18,8 @@ const STEPS: StepDef[] = [
   { step: "result", label: "結果記録" },
 ];
 
-// MVP（Task #6）で実装済みのステップ。未実装は遷移不可にする。
-const IMPLEMENTED: WorkspaceStep[] = ["collect", "lines"];
+// 実装済みのステップ。未実装は遷移不可にする（Sprint 2 で ②〜⑤ すべて実装済み）。
+const IMPLEMENTED: WorkspaceStep[] = ["collect", "lines", "strategy", "result"];
 
 type StepStatus = "done" | "current" | "todo";
 

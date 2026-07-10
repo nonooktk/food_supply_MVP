@@ -1,67 +1,93 @@
 "use client";
 
-// AiGenerationPanel（デザインガイド §4.5）— 枠のみ（画面④作戦シート用。本スプリントでは枠を用意）
+// AiGenerationPanel（デザインガイド §4.5 / 画面④ FR-08）
+// 交渉ポイント・シナリオの AI 生成フロー本体。
 // 状態遷移: idle → searching → building_context → generating → done / error
-// role="status" aria-live="polite" で進捗をスクリーンリーダーへ通知。
-// タイムアウト（目安30秒）で error へ。生成結果には「🤖 AI下書き・要確認」バッジ＋CitationBadge を併設。
-import { useCallback, useState } from "react";
-import type { Citation } from "@/lib/types";
+// - role="status" aria-live="polite" で進捗をスクリーンリーダーへ通知。
+// - タイムアウト（目安30秒）で error へ遷移し「時間がかかっています」を出す。
+// - 生成結果には常に「🤖 AI下書き・要確認」バッジ＋各ポイントに CitationBadge を併設。
+// - 生成後はシナリオ文を編集可能にし、[🔁再生成][この内容で保存] を出す。
+import { useCallback, useEffect, useState } from "react";
+import type { StrategyDraft } from "@/lib/types";
 import { Button } from "./Button";
 import { CitationBadge } from "./CitationBadge";
 
 type GenState = "idle" | "searching" | "building_context" | "generating" | "done" | "error";
 
-const STEP_LABEL: Record<Exclude<GenState, "idle" | "done" | "error">, string> = {
+const STEP_LABEL: Record<"searching" | "building_context" | "generating", string> = {
   searching: "過去事例を検索中…",
   building_context: "関連する交渉の文脈を構築中…",
   generating: "交渉シナリオを生成中…",
 };
+const STEP_ORDER: ("searching" | "building_context" | "generating")[] = [
+  "searching",
+  "building_context",
+  "generating",
+];
 
-const STEP_ORDER: GenState[] = ["searching", "building_context", "generating"];
+const TIMEOUT_MS = 30000;
 
 interface Props {
-  /** 実際の生成処理（未接続の間はダミー）。resolve で結果を返す。 */
-  onGenerate?: () => Promise<{ points: string[]; citations: Citation[] }>;
+  onGenerate: () => Promise<StrategyDraft>;
+  onSave: (draft: StrategyDraft) => Promise<void>;
+  /** 既に保存済みの下書きがあれば done 状態で復元する。 */
+  initial?: StrategyDraft | null;
 }
 
-/** 本スプリントは枠のみ。onGenerate 未指定時はデモ用のダミー生成でステップ表示を確認できる。 */
-async function dummyGenerate(): Promise<{ points: string[]; citations: Citation[] }> {
-  return {
-    points: [
-      "交渉ポイント1: 為替影響を踏まえた根拠提示",
-      "交渉ポイント2: 長期契約による数量メリット訴求",
-    ],
-    citations: [
-      {
-        caseNo: "No.499801",
-        company: "丸紅畜産",
-        product: "鶏もも肉（ブラジル産・冷凍）",
-        snippet: "為替影響を根拠に据え置きで決着。",
-      },
-    ],
-  };
-}
+export function AiGenerationPanel({ onGenerate, onSave, initial }: Props) {
+  const [state, setState] = useState<GenState>(initial ? "done" : "idle");
+  const [draft, setDraft] = useState<StrategyDraft | null>(initial ?? null);
+  const [scenario, setScenario] = useState(initial?.scenario ?? "");
+  const [timedOut, setTimedOut] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(false);
 
-export function AiGenerationPanel({ onGenerate }: Props) {
-  const [state, setState] = useState<GenState>("idle");
-  const [result, setResult] = useState<{ points: string[]; citations: Citation[] } | null>(null);
+  // 保存済み下書きが後から届いた場合の復元（外部データからの初期同期のための意図的な setState）
+  useEffect(() => {
+    if (initial) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDraft(initial);
+      setScenario(initial.scenario);
+      setState("done");
+    }
+  }, [initial]);
 
   const run = useCallback(async () => {
-    setResult(null);
-    // ステップ表示（体感の進捗）。実処理は onGenerate（未接続時は dummy）。
+    setSavedMsg(false);
+    setTimedOut(false);
     setState("searching");
     await new Promise((r) => setTimeout(r, 700));
     setState("building_context");
     await new Promise((r) => setTimeout(r, 700));
     setState("generating");
     try {
-      const gen = await (onGenerate ?? dummyGenerate)();
-      setResult(gen);
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS),
+      );
+      const gen = await Promise.race([onGenerate(), timeout]);
+      setDraft(gen);
+      setScenario(gen.scenario);
       setState("done");
-    } catch {
+    } catch (e) {
+      setTimedOut(e instanceof Error && e.message === "timeout");
       setState("error");
     }
   }, [onGenerate]);
+
+  async function save() {
+    if (!draft) return;
+    setSaving(true);
+    setSavedMsg(false);
+    try {
+      await onSave({ ...draft, scenario });
+      setSavedMsg(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const generating =
+    state === "searching" || state === "building_context" || state === "generating";
 
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
@@ -72,15 +98,13 @@ export function AiGenerationPanel({ onGenerate }: Props) {
         </span>
       </div>
 
-      {state === "idle" && (
-        <Button onClick={run}>AIで交渉ポイントを生成する</Button>
-      )}
+      {state === "idle" && <Button onClick={run}>AIで交渉ポイントを生成する</Button>}
 
-      {(state === "searching" || state === "building_context" || state === "generating") && (
+      {generating && (
         <div role="status" aria-live="polite" className="space-y-2">
           {STEP_ORDER.map((s) => {
             const idx = STEP_ORDER.indexOf(s);
-            const curIdx = STEP_ORDER.indexOf(state);
+            const curIdx = STEP_ORDER.indexOf(state as (typeof STEP_ORDER)[number]);
             const active = idx === curIdx;
             const done = idx < curIdx;
             return (
@@ -96,7 +120,7 @@ export function AiGenerationPanel({ onGenerate }: Props) {
                   }`}
                   aria-hidden="true"
                 />
-                {STEP_LABEL[s as keyof typeof STEP_LABEL]}
+                {STEP_LABEL[s]}
               </div>
             );
           })}
@@ -104,32 +128,59 @@ export function AiGenerationPanel({ onGenerate }: Props) {
       )}
 
       {state === "error" && (
-        <div className="space-y-3">
-          <p className="text-sm text-red-600">生成に失敗しました。もう一度お試しください。</p>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={run}>
-              再試行
-            </Button>
-          </div>
+        <div className="space-y-3" role="status" aria-live="polite">
+          <p className="text-sm text-red-600">
+            {timedOut
+              ? "時間がかかっています。もう一度お試しいただくか、後で確認してください。"
+              : "生成に失敗しました。もう一度お試しください。"}
+          </p>
+          <Button variant="secondary" size="sm" onClick={run}>
+            再試行
+          </Button>
         </div>
       )}
 
-      {state === "done" && result && (
-        <div className="space-y-3">
-          <ul className="space-y-2">
-            {result.points.map((p, i) => (
-              <li key={i} className="flex items-start justify-between gap-3 text-sm text-slate-700">
-                <span>・{p}</span>
+      {state === "done" && draft && (
+        <div className="space-y-4">
+          <ul className="space-y-3">
+            {draft.points.map((p, i) => (
+              <li key={i} className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                <p className="text-sm text-slate-700">・{p.text}</p>
+                <div className="mt-2">
+                  <CitationBadge citations={p.citations} />
+                </div>
               </li>
             ))}
           </ul>
-          <div className="flex items-center gap-2">
-            <CitationBadge citations={result.citations} />
+
+          <div>
+            <label
+              htmlFor="scenario"
+              className="block text-sm font-medium text-slate-700"
+            >
+              交渉シナリオ（編集可）
+            </label>
+            <textarea
+              id="scenario"
+              value={scenario}
+              onChange={(e) => {
+                setScenario(e.target.value);
+                setSavedMsg(false);
+              }}
+              rows={4}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+            />
           </div>
-          <div className="flex gap-2">
+
+          <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={run}>
               🔁 再生成
             </Button>
+            <Button size="sm" onClick={save} loading={saving}>
+              この内容で保存
+            </Button>
+            {savedMsg && <span className="text-sm text-emerald-600">保存しました</span>}
           </div>
         </div>
       )}

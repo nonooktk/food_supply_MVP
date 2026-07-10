@@ -19,6 +19,7 @@ import type {
   CaseDetail,
   CaseStatus,
   CompanyPlan,
+  PastCase,
   PastCaseResult,
   RateInfo,
   ThreeLine,
@@ -153,12 +154,35 @@ class MockApi implements Api {
   async getPastCases(caseNo: string): Promise<PastCaseResult> {
     // KRE 検索は非同期・目標応答3秒以内（要件 N-04）。スケルトン表示を確認できるよう待つ。
     await delay(900);
-    const items = MOCK_PAST_CASES[caseNo];
-    if (items === undefined) {
-      // このモックに登録の無い案件は空扱い（過去取引なし）
-      return { state: "empty", items: [] };
-    }
+    const staticItems = MOCK_PAST_CASES[caseNo] ?? [];
+
+    // 判断継承（BR-10）: ⑤結果記録で決着済みの「同一商材×取引先」案件を過去経緯として合流する。
+    // これにより、決着結果を記録した後に作成した新案件の②情報収集にその結果が現れる。
+    const self = store.getCases().find((c) => c.caseNo === caseNo);
+    const dynamic = self
+      ? store.getPastResults(self.company, self.product, caseNo).map<PastCase>((r) => ({
+          caseNo: r.caseNo,
+          company: r.company,
+          product: r.product,
+          period: r.period,
+          settledPrice: r.settledPrice,
+          relation: undefined,
+          citations: [
+            {
+              caseNo: r.caseNo,
+              company: r.company,
+              product: r.product,
+              snippet: `決着 ¥${r.settledPrice.toLocaleString("ja-JP")}/kg（見積比 ${
+                r.quoteDiffPct >= 0 ? "+" : ""
+              }${r.quoteDiffPct}%）。${r.note ? r.note : "所感の記録なし。"}`,
+            },
+          ],
+        }))
+      : [];
+
+    const items = [...dynamic, ...staticItems];
     if (items.length === 0) {
+      // 過去取引なし（過去案件・決着記録ともに無い）
       return { state: "empty", items: [] };
     }
     return { state: "ready", items };
@@ -208,19 +232,48 @@ class MockApi implements Api {
 }
 
 /** ---- 実 API 実装（NEXT_PUBLIC_USE_MOCK=false）----
- * バックエンド（FastAPI・/api 配下）と通信する。API 未完成のため現状は雛形。
- * エンドポイントの形は要件・設計に合わせてポリゴンと擦り合わせて確定する。
+ * バックエンド（FastAPI・/api 配下・ポリゴン実装）と通信する。
+ * 認証は MVP のモックヘッダー方式（X-Tenant-Id / X-User-Id）。ログインで得た AuthUser を
+ * localStorage（auth.tsx と同じキー）から読み、各リクエストのヘッダーに付与する。
+ * Entra（JWT）へ移行する際はここのヘッダー生成を Authorization: Bearer に差し替える。
  */
+const AUTH_STORAGE_KEY = "freeradicals.auth.v1";
+
 class RealApi implements Api {
   private base = process.env.NEXT_PUBLIC_API_BASE ?? "/api";
 
+  /** localStorage の AuthUser からモック認証ヘッダーを組み立てる（未ログイン時は空）。 */
+  private authHeaders(): Record<string, string> {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!raw) return {};
+      const u = JSON.parse(raw) as AuthUser;
+      return { "X-Tenant-Id": u.tenantId, "X-User-Id": u.userId };
+    } catch {
+      return {};
+    }
+  }
+
   private async req<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetch(`${this.base}${path}`, {
-      headers: { "Content-Type": "application/json" },
       ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...this.authHeaders(),
+        ...(init?.headers as Record<string, string> | undefined),
+      },
     });
     if (!res.ok) {
-      throw new Error(`API エラー: ${res.status} ${res.statusText}`);
+      // バックエンドは RFC7807（application/problem+json）で title を返す。
+      let message = `API エラー: ${res.status}`;
+      try {
+        const problem = await res.json();
+        if (problem?.title) message = String(problem.title);
+      } catch {
+        // JSON でなければステータスのみ
+      }
+      throw new Error(message);
     }
     return (await res.json()) as T;
   }
@@ -238,7 +291,14 @@ class RealApi implements Api {
     return this.req<CaseListResult>(`/cases?${q.toString()}`);
   }
   createCase(input: CaseCreateInput): Promise<CaseDetail> {
-    return this.req<CaseDetail>("/cases", { method: "POST", body: JSON.stringify(input) });
+    // 冪等キーで二重作成を防ぐ（再送・ダブルクリック対策）。
+    const idempotencyKey =
+      typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
+    return this.req<CaseDetail>("/cases", {
+      method: "POST",
+      body: JSON.stringify(input),
+      headers: { "Idempotency-Key": idempotencyKey },
+    });
   }
   getCase(caseNo: string): Promise<CaseDetail> {
     return this.req<CaseDetail>(`/cases/${encodeURIComponent(caseNo)}`);

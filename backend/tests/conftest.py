@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -17,13 +18,12 @@ from app.db import models as m
 from app.db.models import Base
 
 
-@pytest.fixture()
-def db_session() -> Session:
-    """FK 有効・インメモリ SQLite の新規セッションを返す（テストごとに独立）。"""
+def _memory_engine():
+    """FK 有効・インメモリ SQLite エンジン（StaticPool で単一接続を共有）。"""
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
-        poolclass=StaticPool,  # 単一接続を共有し、インメモリDBを保持する
+        poolclass=StaticPool,
         future=True,
     )
 
@@ -34,6 +34,13 @@ def db_session() -> Session:
         cur.close()
 
     Base.metadata.create_all(engine)
+    return engine
+
+
+@pytest.fixture()
+def db_session() -> Session:
+    """FK 有効・インメモリ SQLite の新規セッションを返す（テストごとに独立）。"""
+    engine = _memory_engine()
     session = sessionmaker(bind=engine, future=True)()
     try:
         yield session
@@ -59,3 +66,55 @@ def minimal_graph(db_session: Session):
     )
     db_session.flush()
     return tenant_id, 1, 1
+
+
+@dataclass
+class ApiHarness:
+    """API テスト用のクライアント一式（seed 済みインメモリ DB へ接続）。"""
+
+    client: object  # fastapi.testclient.TestClient
+    tenant_id: str
+    sessionmaker: object
+
+    def headers(self, *, tenant_id: str | None = None, user_id: str = "tanaka") -> dict:
+        return {"X-Tenant-Id": tenant_id or self.tenant_id, "X-User-Id": user_id}
+
+    def new_session(self) -> Session:
+        return self.sessionmaker()
+
+
+@pytest.fixture()
+def api() -> ApiHarness:
+    """seed 済みインメモリ DB に接続した TestClient を返す。
+
+    アプリの get_session 依存をテスト用エンジンに差し替える。KRE は既定のスタブ（DI）を使う。
+    """
+    from fastapi.testclient import TestClient
+
+    from app.api import deps
+    from app.ingest.seed import seed_all
+    from app.main import create_app
+
+    engine = _memory_engine()
+    SM = sessionmaker(bind=engine, future=True)
+    seed_session = SM()
+    counts = seed_all(seed_session)
+    tenant_id = counts["tenant_id"]
+    seed_session.close()
+
+    app = create_app()
+
+    def _override_session():
+        db = SM()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[deps.get_session] = _override_session
+    client = TestClient(app)
+    try:
+        yield ApiHarness(client=client, tenant_id=tenant_id, sessionmaker=SM)
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()

@@ -112,10 +112,7 @@ export default function LinesPage() {
       </section>
 
       <div className="flex justify-end">
-        <Button
-          disabled
-          title="作戦シート生成は次スプリントで実装します"
-        >
+        <Button onClick={() => router.push(`/cases/${encodeURIComponent(caseNo)}/strategy`)}>
           次へ：作戦シート生成 →
         </Button>
       </div>
