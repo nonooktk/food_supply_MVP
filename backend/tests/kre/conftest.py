@@ -104,3 +104,105 @@ def stub() -> StubRetrievalEngine:
 @pytest.fixture
 def fixtures_dir() -> Path:
     return FIXTURES_DIR
+
+
+# ------------------------------------------------------------------------------
+# 本実装（engine / graph）検証用の DB データセット
+#   Azure を呼ばず、グラフ補完（同一取引先の別商材・同一変動理由の他社事例）と
+#   テナント越境ゼロを検証できる最小データを、FK 有効なインメモリ SQLite に投入する。
+# ------------------------------------------------------------------------------
+def _seed_purchasing_dataset(session):
+    """t-frd（丸紅畜産）と t-acme（越境検証用）の最小購買データを投入する。
+
+    t-frd:
+      - supplier 12 丸紅畜産 / supplier 99 東西ミート（他社事例用）
+      - spec 305 鶏もも肉（ブラジル／冷凍）/ spec 306 鶏むね肉（ブラジル／冷凍・別商材用）
+      - case No.500023: sup12 × spec305 × RC-03（種）
+      - case No.500031: sup12 × spec306 × RC-03（同一取引先の別商材）
+      - case No.500099: sup99 × spec305 × RC-03（同一変動理由の他社事例）
+      - result 9021: No.500023 の決着（認めた理由 RC-03）
+    t-acme:
+      - supplier 44 スターゼン / spec 812 豚バラ肉 / case No.700088（越境混入検査用）
+    """
+    from app.db import models as m
+
+    # 共有マスタ（変動理由）。
+    session.add_all(
+        [
+            m.RateChangeReason(reason_id="RC-03", reason_name="飼料価格高騰", impact_direction="↑"),
+            m.RateChangeReason(reason_id="RC-05", reason_name="為替変動", impact_direction="±"),
+        ]
+    )
+
+    # ---- t-frd ----
+    session.add(m.Tenant(tenant_id="t-frd", tenant_name="ふりぃらじかるずデモ", case_no_prefix=""))
+    session.add(m.Supplier(supplier_id=12, tenant_id="t-frd", supplier_name="丸紅畜産"))
+    session.add(m.Supplier(supplier_id=99, tenant_id="t-frd", supplier_name="東西ミート"))
+    session.add(m.Product(product_id=1, tenant_id="t-frd", product_name="鶏もも肉", unit="kg"))
+    session.add(m.Product(product_id=2, tenant_id="t-frd", product_name="鶏むね肉", unit="kg"))
+    session.flush()
+    session.add(
+        m.ProductSpec(spec_id=305, tenant_id="t-frd", product_id=1, origin="ブラジル産", storage_type="冷凍")
+    )
+    session.add(
+        m.ProductSpec(spec_id=306, tenant_id="t-frd", product_id=2, origin="ブラジル産", storage_type="冷凍")
+    )
+    session.flush()
+    session.add(
+        m.NegotiationCase(
+            tenant_id="t-frd", case_no="No.500023", supplier_id=12, spec_id=305,
+            period="2025Q3", case_type="値上げ要請", status="完了",
+            current_price=620, proposed_price=635, volume_kg_month=18000,
+            claimed_reasons=["RC-03"],
+        )
+    )
+    session.add(
+        m.NegotiationCase(
+            tenant_id="t-frd", case_no="No.500031", supplier_id=12, spec_id=306,
+            period="2025Q3", case_type="値上げ要請", status="交渉中",
+            current_price=520, proposed_price=540, claimed_reasons=["RC-03"],
+        )
+    )
+    session.add(
+        m.NegotiationCase(
+            tenant_id="t-frd", case_no="No.500099", supplier_id=99, spec_id=305,
+            period="2025Q2", case_type="値上げ要請", status="完了",
+            current_price=615, proposed_price=630, claimed_reasons=["RC-03"],
+        )
+    )
+    session.flush()
+    session.add(
+        m.NegotiationResult(
+            tenant_id="t-frd", case_no="No.500023", final_price=635,
+            achievement=78, accepted_reasons=["RC-03"], result_tags=["相場上昇を反映"],
+            staff_memo="飼料高騰を一部認め決着",
+        )
+    )
+
+    # ---- t-acme（越境検査用） ----
+    # 代理キー（product_id/supplier_id/spec_id）は単一 PK でテナント横断に一意。
+    # t-frd と衝突しない値を用いる。
+    session.add(m.Tenant(tenant_id="t-acme", tenant_name="別テナント", case_no_prefix=""))
+    session.add(m.Supplier(supplier_id=44, tenant_id="t-acme", supplier_name="スターゼン"))
+    session.add(m.Product(product_id=91, tenant_id="t-acme", product_name="豚バラ肉", unit="kg"))
+    session.flush()
+    session.add(
+        m.ProductSpec(spec_id=812, tenant_id="t-acme", product_id=91, origin="デンマーク産", storage_type="冷凍")
+    )
+    session.flush()
+    session.add(
+        m.NegotiationCase(
+            tenant_id="t-acme", case_no="No.700088", supplier_id=44, spec_id=812,
+            period="2025Q3", case_type="値上げ要請", status="完了",
+            current_price=480, proposed_price=498, claimed_reasons=["RC-05"],
+        )
+    )
+    session.flush()
+    session.commit()
+
+
+@pytest.fixture
+def purchasing_session(db_session):
+    """購買データセットを投入済みのインメモリ DB セッション（db_session は tests/conftest.py）。"""
+    _seed_purchasing_dataset(db_session)
+    return db_session
