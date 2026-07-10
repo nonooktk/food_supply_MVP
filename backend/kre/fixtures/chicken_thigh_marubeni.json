@@ -16,7 +16,7 @@
         "id": "t-frd:case:No.500023",
         "source": "case",
         "score": 0.91,
-        "snippet": "鶏もも肉（ブラジル産・チルド）／丸紅畜産の2025-07値上げ要請。主張理由=飼料価格高騰(RC-03)。",
+        "snippet": "鶏もも肉（ブラジル産・冷凍）／丸紅畜産の2025-07値上げ要請。主張理由=飼料価格高騰(RC-03)。",
         "ref": {"table": "negotiation_cases", "pk": "No.500023"}
       },
       {
@@ -30,8 +30,8 @@
     "graph_context": {
       "nodes": [
         {"id": "t-frd:sup:12", "type": "supplier", "label": "丸紅畜産"},
-        {"id": "t-frd:spec:305", "type": "product_spec", "label": "鶏もも肉／ブラジル／チルド"},
-        {"id": "t-frd:spec:306", "type": "product_spec", "label": "鶏むね肉／ブラジル／チルド"},
+        {"id": "t-frd:spec:305", "type": "product_spec", "label": "鶏もも肉／ブラジル／冷凍"},
+        {"id": "t-frd:spec:306", "type": "product_spec", "label": "鶏むね肉／ブラジル／冷凍"},
         {"id": "t-frd:rc:RC-03", "type": "rate_change_reason", "label": "飼料価格高騰"}
       ],
       "edges": [

@@ -42,7 +42,7 @@ def test_graph_completion_present(stub) -> None:
     relations = {e.relation for e in result.graph_context.edges}
 
     # 同一取引先（丸紅畜産）の別商材（鶏むね肉）がノードにある。
-    assert "鶏むね肉／ブラジル／チルド" in labels
+    assert "鶏むね肉／ブラジル／冷凍" in labels
     # 変動理由ノード（RC-03 飼料価格高騰）がある＝同一変動理由の展開軸。
     assert "rate_change_reason" in types
     # 『対象商材』『取引先』『主張変動理由』のエッジが展開されている（§4.1）。
