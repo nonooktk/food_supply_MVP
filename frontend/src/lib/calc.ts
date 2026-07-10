@@ -1,7 +1,13 @@
 // 3ライン算出ロジック（純粋関数）
-// 要件 F-05: 相場・計画・過去価格から目標/着地/撤退を計算式で自動算出（AI不使用・単純計算式）。
-// 算出式はサーバー側処理だが、モック段階ではフロントで同等の式を実装する。
-// 実 API 接続時はこの結果をバックエンドが返す（lib/api.ts の real 実装で置換）。
+// 要件 F-05: 相場・計画・過去価格から目標/着地/撤退を計算式で機械的に算出（AI不使用）。
+//
+// 本ファイルの式は算出正本 CALC_RULE_V1（backend/app/db/seams.py L78-107）と一致させている。
+//   目標(target)   = max(相場, 0.95 × 過去最安)
+//   着地(landing)  = clamp(0.5×過去平均 + 0.3×計画単価 + 0.2×相場, 目標, 撤退)
+//   撤退(walkaway) = min(許容上限, 現行 × (1 + 相場前年比 + 2pt))
+//   欠損時はフォールバック（過去情報が無い場合は相場・現行で代替）。
+// モック段階ではこの式でフロント側算出するが、実 API 接続時はバックエンドが
+// 同一の CALC_RULE_V1 で算出した結果を返す（lib/api.ts の RealApi で置換）。
 
 import type {
   AnnualImpact,
@@ -12,17 +18,36 @@ import type {
   ThreeLineResult,
 } from "@/lib/types";
 
+/** CALC_RULE_V1 のパラメータ（seams.py CALC_RULE_V1.params と一致） */
+const LANDING_WEIGHTS = { pastAvg: 0.5, planPrice: 0.3, marketRate: 0.2 } as const;
+const WALKAWAY_MARGIN_PT = 0.02; // 撤退マージン +2pt
+const TARGET_PAST_MIN_RATIO = 0.95; // 目標 = max(相場, 0.95×過去最安)
+
 /** 計画が算出に足るだけ入力されているか（デザインガイド §3.3 エラー状態） */
 export function isPlanReady(plan: CompanyPlan): boolean {
   return plan.planPrice > 0 && plan.monthlyVolume > 0 && plan.ceilingPrice > 0;
 }
 
+/** x を [lo, hi] に収める（seams.py の clamp 相当）。lo>hi の異常入力時は hi を返す。 */
+function clamp(x: number, lo: number, hi: number): number {
+  return Math.min(Math.max(x, lo), hi);
+}
+
 /**
- * 3本のライン（自動算出値）を計算する。
- * - 目標(target)   = min(計画仕入単価, 直近の過去決着) の 3% 引き（安全に進めてよい水準）
- * - 着地(landing)  = 過去決着 0.7 + 相場 0.3 の加重平均（現実的な落とし所）
- * - 撤退(walkaway) = 許容上限（これ以上譲れない境界）
- * ※ 過去決着が無い場合は相場を代替に用いる。
+ * 算出に用いる「過去価格」を取り出す。
+ * グラフ補完（relation 付き＝同一取引先の別商材等）は数値算出には使わず、
+ * 直接一致（relation なし＝同一商材×取引先）の決着単価のみを過去最安・過去平均に用いる。
+ * 直接一致が無ければ全過去、それも無ければ空配列を返す（呼び出し側で相場フォールバック）。
+ */
+function pastPrices(pastCases: PastCase[]): number[] {
+  const direct = pastCases.filter((c) => !c.relation).map((c) => c.settledPrice);
+  if (direct.length > 0) return direct;
+  return pastCases.map((c) => c.settledPrice);
+}
+
+/**
+ * 3本のライン（自動算出値）を CALC_RULE_V1 で計算する。
+ * 欠損（過去価格なし）時は相場を過去最安・過去平均の代替に用いる。
  */
 export function calcAutoLines(
   rate: RateInfo,
@@ -30,11 +55,26 @@ export function calcAutoLines(
   pastCases: PastCase[],
 ): { target: number; landing: number; walkaway: number } {
   const market = rate.latestPrice;
-  const latestPast = pastCases.length > 0 ? pastCases[0].settledPrice : market;
+  const current = rate.currentPrice > 0 ? rate.currentPrice : market;
+  const yoy = rate.yoyRate;
 
-  const target = Math.round(Math.min(plan.planPrice, latestPast) * 0.97);
-  const landing = Math.round(latestPast * 0.7 + market * 0.3);
-  const walkaway = plan.ceilingPrice;
+  const prices = pastPrices(pastCases);
+  const pastMin = prices.length > 0 ? Math.min(...prices) : market;
+  const pastAvg =
+    prices.length > 0 ? prices.reduce((a, b) => a + b, 0) / prices.length : market;
+
+  // 目標 = max(相場, 0.95×過去最安)
+  const target = Math.round(Math.max(market, TARGET_PAST_MIN_RATIO * pastMin));
+  // 撤退 = min(許容上限, 現行×(1 + 相場前年比 + 2pt))
+  const walkaway = Math.round(
+    Math.min(plan.ceilingPrice, current * (1 + yoy + WALKAWAY_MARGIN_PT)),
+  );
+  // 着地 = clamp(0.5×過去平均 + 0.3×計画単価 + 0.2×相場, 目標, 撤退)
+  const landingRaw =
+    LANDING_WEIGHTS.pastAvg * pastAvg +
+    LANDING_WEIGHTS.planPrice * plan.planPrice +
+    LANDING_WEIGHTS.marketRate * market;
+  const landing = Math.round(clamp(landingRaw, target, walkaway));
 
   return { target, landing, walkaway };
 }
@@ -42,7 +82,7 @@ export function calcAutoLines(
 /**
  * 年間影響額の試算（対計画）。
  * 影響額 = (計画仕入単価 − ライン単価) × 年間発注量(= 月次 × 12)。
- * 計画より安く決着できるほどプラス。
+ * 計画より安く決着できるほどプラス、計画より高いとマイナス（相場上昇局面）。
  */
 export function calcAnnualImpact(
   plan: CompanyPlan,

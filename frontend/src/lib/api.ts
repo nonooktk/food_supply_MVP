@@ -181,10 +181,17 @@ class MockApi implements Api {
     const rate = await this.getRateInfo(caseNo);
     const past = MOCK_PAST_CASES[caseNo] ?? [];
     const auto = buildThreeLineResult(rate, plan, past);
-    // 手修正済みのラインがあれば上書きし、年間影響額も手修正後の値で再計算する
+    // 手修正済みのラインのみ上書きする。未修正ラインは常に最新の自動算出値（auto）を使い、
+    // autoValue も最新の自動算出値に保つ（「自動値に戻す」で現在の算出値へ戻せる）。
+    // 年間影響額も上書き後の目標・着地で再計算する。
     const saved = store.getLines(caseNo);
-    if (saved && auto.ready) {
-      const merged = auto.lines.map((l) => saved.find((s) => s.type === l.type) ?? l);
+    if (saved && saved.length > 0 && auto.ready) {
+      const merged = auto.lines.map((l) => {
+        const edit = saved.find((s) => s.type === l.type && s.isEdited);
+        return edit
+          ? { ...l, value: edit.value, isEdited: true, editReason: edit.editReason }
+          : l;
+      });
       const target = merged.find((l) => l.type === "target")?.value ?? auto.lines[0].value;
       const landing = merged.find((l) => l.type === "landing")?.value ?? auto.lines[1].value;
       const impact = calcAnnualImpact(plan, target, landing);

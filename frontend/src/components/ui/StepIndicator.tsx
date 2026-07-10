@@ -56,7 +56,6 @@ export function StepIndicator({
       {STEPS.map((s, i) => {
         const st = statusOf(s.step, i);
         const nav = canNavigate(s.step);
-        const notImplemented = !IMPLEMENTED.includes(s.step);
         return (
           <div key={s.step} className="flex items-center gap-2">
             <button
@@ -64,14 +63,13 @@ export function StepIndicator({
               onClick={() => go(s.step)}
               disabled={!nav || s.step === current}
               title={
-                notImplemented
-                  ? "この画面は今スプリントでは未実装です"
-                  : !nav
-                    ? "先に前のステップを完了してください"
-                    : undefined
+                // 未到達ステップは直前ステップ名を挙げて案内する（デザインガイド §2.2 の例文に準拠）。
+                !nav && s.step !== current && i > 0
+                  ? `先に${STEPS[i - 1].label}を完了してください`
+                  : undefined
               }
               aria-current={st === "current" ? "step" : undefined}
-              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors
+              className={`inline-flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm transition-colors
                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1
                 ${
                   st === "current"

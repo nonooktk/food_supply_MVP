@@ -75,7 +75,14 @@ export function getLines(caseNo: string): ThreeLine[] | null {
 
 export function setLines(caseNo: string, lines: ThreeLine[]): void {
   const s = loadStore();
-  s.lines[caseNo] = lines;
+  // 手修正済み（isEdited=true）のラインのみ永続化する。未修正ラインは保存せず、
+  // 取得時に毎回そのときの相場・計画から再算出させる（3本まとめて凍結しない）。
+  const edited = lines.filter((l) => l.isEdited);
+  if (edited.length > 0) {
+    s.lines[caseNo] = edited;
+  } else {
+    delete s.lines[caseNo];
+  }
   saveStore(s);
 }
 

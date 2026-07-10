@@ -18,7 +18,7 @@ export function CitationBadge({ citations }: { citations: Citation[] }) {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium
+        className={`inline-flex min-h-[44px] items-center gap-1 rounded-md border px-3 py-1 text-xs font-medium
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1
           ${
             empty

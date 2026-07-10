@@ -20,9 +20,10 @@ const VARIANT: Record<Variant, string> = {
   danger: "bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300",
 };
 
-// クリック領域 44px 相当を確保（§1.5）。sm でも py で高さを稼ぐ。
+// クリック領域は最小 44×44px を確保（デザインガイド §1.5）。sm/md の違いは
+// 文字サイズと左右パディングの密度で表現し、高さは両方 44px を下回らせない。
 const SIZE: Record<Size, string> = {
-  sm: "text-sm px-3 min-h-[36px]",
+  sm: "text-sm px-3 min-h-[44px]",
   md: "text-sm px-4 min-h-[44px]",
 };
 

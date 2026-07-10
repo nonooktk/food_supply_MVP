@@ -38,10 +38,11 @@ export const MOCK_CASES: CaseSummary[] = [
     assignee: "田中",
   },
   {
+    // No.500001 の過去経緯で「決着 ¥415/kg」として引用される案件。決着済みのため done。
     caseNo: "No.499960",
     company: "丸紅畜産",
     product: "鶏むね肉（ブラジル産・冷凍）",
-    status: "negotiating",
+    status: "done",
     updatedAt: "06/28",
     assignee: "鈴木",
   },
@@ -53,6 +54,16 @@ export const MOCK_CASES: CaseSummary[] = [
     updatedAt: "06/20",
     assignee: "佐藤",
   },
+  {
+    // No.500001 の過去経緯で「決着 ¥598/kg」として引用される同一商材×取引先の決着済み案件。
+    // 引用元をたどると done ステータスの案件に到達する（m-4 整合）。
+    caseNo: "No.499801",
+    company: "丸紅畜産",
+    product: "鶏もも肉（ブラジル産・冷凍）",
+    status: "done",
+    updatedAt: "02/12",
+    assignee: "田中",
+  },
 ];
 
 /** 案件詳細（ワークスペースヘッダー用）。一覧に無い項目を補完する。 */
@@ -60,26 +71,34 @@ export const MOCK_CASE_DETAILS: Record<string, Omit<CaseDetail, keyof CaseSummar
   "No.500001": { quotedPrice: 620, targetPeriod: "2026Q3", currentStep: "collect" },
   "No.499998": { quotedPrice: 780, targetPeriod: "2026Q3", currentStep: "collect" },
   "No.499987": { quotedPrice: 1580, targetPeriod: "2026Q2", currentStep: "result" },
-  "No.499960": { quotedPrice: 430, targetPeriod: "2026Q3", currentStep: "lines" },
+  "No.499960": { quotedPrice: 430, targetPeriod: "2025Q4", currentStep: "result" },
   "No.499921": { quotedPrice: 340, targetPeriod: "2026Q2", currentStep: "result" },
+  "No.499801": { quotedPrice: 620, targetPeriod: "2026Q1", currentStep: "result" },
 };
 
-/** 相場情報（案件番号 → 相場）。デザインガイド §3.2 のサンプル ¥620/kg。 */
+/** 相場情報（案件番号 → 相場）。デザインガイド §3.2 のサンプル ¥620/kg。
+ *  currentPrice（現行仕入単価）・yoyRate（相場前年比）は CALC_RULE_V1 の撤退ライン算出に使用。 */
 export const MOCK_RATES: Record<string, RateInfo> = {
   "No.500001": {
     latestPrice: 620,
+    currentPrice: 610, // 現行の仕入単価
+    yoyRate: 0.03, // 相場前年比 +3%（上昇局面）
     unit: "円/kg",
     normalizedCount: 12,
     note: "日付・%表記ゆれを自動補正済み（Jul-25→2025-07 等）",
   },
   "No.499998": {
     latestPrice: 780,
+    currentPrice: 770,
+    yoyRate: 0.04,
     unit: "円/kg",
     normalizedCount: 8,
     note: "日付・%表記ゆれを自動補正済み",
   },
   "No.499960": {
     latestPrice: 430,
+    currentPrice: 420,
+    yoyRate: 0.02,
     unit: "円/kg",
     normalizedCount: 10,
     note: "日付・%表記ゆれを自動補正済み",
