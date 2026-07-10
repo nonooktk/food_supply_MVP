@@ -56,9 +56,29 @@ def test_postgresql_url_encodes_symbol_password(monkeypatch: pytest.MonkeyPatch)
     assert url.startswith("postgresql+psycopg://")
 
 
-def test_sqlite_url_unaffected(monkeypatch: pytest.MonkeyPatch) -> None:
-    """sqlite は資格情報を持たず、従来どおりのパス URL。"""
+def test_sqlite_relative_path_resolved_to_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    """相対 SQLITE_PATH は CWD 非依存で backend ディレクトリ基準の絶対パスへ解決される。"""
     monkeypatch.setenv("DB_BACKEND", "sqlite")
     monkeypatch.setenv("SQLITE_PATH", "./freeradicals.db")
     s = Settings(_env_file=None)
-    assert s.resolve_database_url() == "sqlite:///./freeradicals.db"
+    url = s.resolve_database_url()
+    # 絶対パス（sqlite:/// + 先頭 / で4スラッシュ）・backend/ 直下の freeradicals.db を指す。
+    assert url.startswith("sqlite:////")
+    assert url.endswith("/freeradicals.db")
+    assert "/backend/" in url
+
+
+def test_sqlite_absolute_path_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """絶対 SQLITE_PATH はそのまま使う（既存挙動を壊さない）。"""
+    monkeypatch.setenv("DB_BACKEND", "sqlite")
+    monkeypatch.setenv("SQLITE_PATH", "/tmp/foo.db")
+    s = Settings(_env_file=None)
+    assert s.resolve_database_url() == "sqlite:////tmp/foo.db"
+
+
+def test_sqlite_memory_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """:memory: はパス解決しない。"""
+    monkeypatch.setenv("DB_BACKEND", "sqlite")
+    monkeypatch.setenv("SQLITE_PATH", ":memory:")
+    s = Settings(_env_file=None)
+    assert s.resolve_database_url() == "sqlite:///:memory:"

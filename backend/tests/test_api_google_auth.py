@@ -76,3 +76,24 @@ def test_mock_login_works_by_default(api) -> None:
     )
     assert res.status_code == 200
     assert res.json()["tenantId"] == api.tenant_id
+
+
+def test_clock_skew_passed_to_verifier(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ホットフィックス検証: verify_oauth2_token に clock_skew_in_seconds=10 が渡ること。
+
+    ローカル機の時計ズレによる「Token used too early」対策（コーディネーターのホットフィックス）。
+    """
+    from app.auth.google import verify_google_credential
+
+    monkeypatch.setattr(get_settings(), "google_client_id", "test-client.apps.googleusercontent.com")
+
+    captured: dict = {}
+
+    def _spy(credential, request, client_id, **kwargs):  # noqa: ANN001
+        captured.update(kwargs)
+        return {"sub": "g-1", "email": "u@example.com", "name": "U"}
+
+    monkeypatch.setattr("google.oauth2.id_token.verify_oauth2_token", _spy)
+    identity = verify_google_credential("header.payload.sig")
+    assert captured.get("clock_skew_in_seconds") == 10
+    assert identity.email == "u@example.com"

@@ -50,10 +50,17 @@ def verify_google_credential(credential: str) -> GoogleIdentity:
 
     try:
         # aud（クライアントID）・署名・有効期限を Google 側で検証する。
+        # clock_skew_in_seconds: ローカル開発機の時計が数秒ズレていると
+        # 「Token used too early」で失敗するため、許容ズレ10秒を与える（Google 推奨の標準対処）。
         info = id_token.verify_oauth2_token(
-            credential, google_requests.Request(), client_id
+            credential, google_requests.Request(), client_id, clock_skew_in_seconds=10
         )
     except Exception as exc:  # noqa: BLE001 - ライブラリは多様な例外を投げるため一括で扱う
+        import logging
+
+        logging.getLogger("app.auth.google").warning(
+            "Google ID トークン検証失敗: %r", exc
+        )
         raise GoogleAuthError("Google ID トークンの検証に失敗しました。") from exc
 
     sub = info.get("sub")

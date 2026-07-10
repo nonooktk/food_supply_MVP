@@ -84,16 +84,24 @@ class ApiHarness:
 
 
 @pytest.fixture()
-def api() -> ApiHarness:
+def api(monkeypatch: pytest.MonkeyPatch) -> ApiHarness:
     """seed 済みインメモリ DB に接続した TestClient を返す。
 
     アプリの get_session 依存をテスト用エンジンに差し替える。KRE は既定のスタブ（DI）を使う。
+    認証は既定を mock に固定する（.env が AUTH_MODE=google でもテストを安定させる。
+    google モードを検証するテストは自身で auth_mode を上書きする）。
     """
     from fastapi.testclient import TestClient
 
     from app.api import deps
+    from app.config import get_settings
     from app.ingest.seed import seed_all
     from app.main import create_app
+
+    # 認証モードのテスト既定（.env 値に依存させない）。
+    _settings = get_settings()
+    monkeypatch.setattr(_settings, "auth_mode", "mock")
+    monkeypatch.setattr(_settings, "google_client_id", "")
 
     engine = _memory_engine()
     SM = sessionmaker(bind=engine, future=True)

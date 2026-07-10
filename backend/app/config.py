@@ -18,9 +18,10 @@ from urllib.parse import quote_plus
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# backend/ ディレクトリの絶対パス。このファイルは backend/app/config.py なので、2つ上が backend/。
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
 # backend/.env の絶対パス（CWD に依存させない）。
-# このファイルは backend/app/config.py なので、2つ上が backend/。
-_ENV_FILE = str(Path(__file__).resolve().parent.parent / ".env")
+_ENV_FILE = str(_BACKEND_DIR / ".env")
 
 
 class DbBackend(str, Enum):
@@ -102,6 +103,24 @@ class Settings(BaseSettings):
         """CORS_ORIGINS をカンマ区切りで分解したリストを返す。"""
         return [o.strip().rstrip("/") for o in self.cors_origins_raw.split(",") if o.strip()]
 
+    def resolved_sqlite_path(self) -> str:
+        """SQLITE_PATH を backend ディレクトリ基準の絶対パスへ解決する。
+
+        相対パス（既定の ``./freeradicals.db`` 等）は **プロセスの起動場所（CWD）に依存** するため、
+        起動場所によっては空 DB が別の場所に新規作成される事故が起きる（実機で発生）。
+        backend/ を基準に絶対パス化して CWD 非依存にする。既に絶対パスや ``:memory:`` の場合は
+        そのまま返す（既存挙動を壊さない。相対 ``./freeradicals.db`` は従来どおり backend/ 直下を指す）。
+        """
+        raw = self.sqlite_path.strip()
+        if not raw or raw == ":memory:" or raw.startswith("file:"):
+            return raw
+        p = Path(raw)
+        if p.is_absolute():
+            # 絶対パスはそのまま尊重する（.resolve() はシンボリックリンクを辿るため使わない）。
+            return str(p)
+        # 相対パスは backend/ 基準で絶対化する（_BACKEND_DIR は解決済みの絶対パス）。
+        return str(_BACKEND_DIR / p)
+
     def resolve_database_url(self) -> str:
         """DB_BACKEND シームに応じて SQLAlchemy 用の接続URLを解決する。
 
@@ -113,7 +132,7 @@ class Settings(BaseSettings):
         別途エンジンに渡す方針とし、URL 自体は素直に組み立てる。
         """
         if self.db_backend is DbBackend.SQLITE:
-            return f"sqlite:///{self.sqlite_path}"
+            return f"sqlite:///{self.resolved_sqlite_path()}"
         if self.db_backend is DbBackend.MYSQL:
             # user / password は記号（@ : / 等）を含みうるため URL エンコードする。
             user = quote_plus(self.db_user)
