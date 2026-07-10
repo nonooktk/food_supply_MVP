@@ -1,0 +1,483 @@
+{
+ "suppliers": [
+  {
+   "supplier_id": 1,
+   "supplier_name": "丸紅畜産",
+   "supplier_category": "食肉（輸入鶏肉）",
+   "supplier_memo": "ブラジル産鶏肉ライン。取引8年・数量重視の交渉が効きやすい。為替の話題に敏感"
+  },
+  {
+   "supplier_id": 2,
+   "supplier_name": "東日本ミート",
+   "supplier_category": "食肉（国産）",
+   "supplier_memo": "国産鶏・豚が主力。品質安定だが価格は強気。決裁が遅い(2週間)"
+  },
+  {
+   "supplier_id": 3,
+   "supplier_name": "グローバルフーズ商事",
+   "supplier_category": "食肉（輸入牛肉）",
+   "supplier_memo": "相見積で使うと丸紅畜産が動きやすい。小口はNG"
+  },
+  {
+   "supplier_id": 4,
+   "supplier_name": "中央フーズ",
+   "supplier_category": "加工品",
+   "supplier_memo": "加工品全般。長期契約志向"
+  }
+ ],
+ "products": [
+  {
+   "product_id": 1,
+   "product_name": "鶏もも肉",
+   "category": "食肉",
+   "unit": "kg"
+  },
+  {
+   "product_id": 2,
+   "product_name": "鶏むね肉",
+   "category": "食肉",
+   "unit": "kg"
+  },
+  {
+   "product_id": 3,
+   "product_name": "牛バラ肉",
+   "category": "食肉",
+   "unit": "kg"
+  },
+  {
+   "product_id": 4,
+   "product_name": "鶏卵",
+   "category": "卵",
+   "unit": "kg"
+  }
+ ],
+ "product_specs": [
+  {
+   "spec_id": 1,
+   "product_id": 1,
+   "origin": "ブラジル産",
+   "part": "もも",
+   "grade": null,
+   "storage_type": "冷凍",
+   "pack": "2kg×6/c/s",
+   "infomart_code": "113501",
+   "spec_memo": "デモ対象。ブラジル産鶏肉F/もも。1c/s=12kg"
+  },
+  {
+   "spec_id": 2,
+   "product_id": 1,
+   "origin": "国産",
+   "part": "もも",
+   "grade": null,
+   "storage_type": "チルド",
+   "pack": "2kg×6/c/s",
+   "infomart_code": "113805",
+   "spec_memo": "国産鶏肉C/もも。ブラジル産と価格帯が別物"
+  },
+  {
+   "spec_id": 3,
+   "product_id": 1,
+   "origin": "タイ産",
+   "part": "もも切り身",
+   "grade": null,
+   "storage_type": "冷凍",
+   "pack": "2kg×6/c/s",
+   "infomart_code": "113302",
+   "spec_memo": "タイ産鶏肉F/もも切り身。代替候補"
+  },
+  {
+   "spec_id": 4,
+   "product_id": 2,
+   "origin": "国産",
+   "part": "むね",
+   "grade": null,
+   "storage_type": "チルド",
+   "pack": "2kg×6/c/s",
+   "infomart_code": "113803",
+   "spec_memo": "国産鶏肉C/むね"
+  },
+  {
+   "spec_id": 5,
+   "product_id": 3,
+   "origin": "国産",
+   "part": "バラ(かたばら)",
+   "grade": "国産牛",
+   "storage_type": "チルド",
+   "pack": "バラ凍結",
+   "infomart_code": "114704",
+   "spec_memo": "国産牛C/かたばら"
+  },
+  {
+   "spec_id": 6,
+   "product_id": 4,
+   "origin": null,
+   "part": "Ｌ",
+   "grade": null,
+   "storage_type": null,
+   "pack": "10kg箱",
+   "infomart_code": "111701",
+   "spec_memo": "鶏卵/Ｌサイズ"
+  }
+ ],
+ "company_plans": [
+  {
+   "plan_id": 1,
+   "spec_id": 1,
+   "period": "2026Q3",
+   "target_cost_rate": "30.0%",
+   "planned_price": 595,
+   "volume_kg_month": 18000,
+   "annual_volume_kg": 216000,
+   "max_acceptable_price": 615,
+   "note": "デモ対象。唐揚げフェア継続前提"
+  },
+  {
+   "plan_id": 2,
+   "spec_id": 1,
+   "period": "2026Q4",
+   "target_cost_rate": "30.0%",
+   "planned_price": 600,
+   "volume_kg_month": 20000,
+   "annual_volume_kg": 240000,
+   "max_acceptable_price": 620,
+   "note": "年末繁忙で数量増見込み"
+  },
+  {
+   "plan_id": 3,
+   "spec_id": 4,
+   "period": "2026Q3",
+   "target_cost_rate": "31.0%",
+   "planned_price": 680,
+   "volume_kg_month": 6000,
+   "annual_volume_kg": 72000,
+   "max_acceptable_price": 700,
+   "note": null
+  }
+ ],
+ "negotiation_cases": [
+  {
+   "case_no": "No.123456-a",
+   "supplier_id": 1,
+   "spec_id": 1,
+   "period": "2026Q3",
+   "case_type": "値上げ要請",
+   "status": "交渉中",
+   "current_price": 609,
+   "proposed_price": 620,
+   "volume_kg_month": 18000,
+   "annual_volume_kg": 216000,
+   "proposed_conditions": "改定要請。数量条件は応相談",
+   "claimed_reasons": "為替影響,原材料・飼料価格,物流費・燃料費",
+   "valid_until": "2026-07-31",
+   "created_by": "佐藤",
+   "data_origin": "初期データ"
+  },
+  {
+   "case_no": "No.123455-a",
+   "supplier_id": 1,
+   "spec_id": 1,
+   "period": "2026Q2",
+   "case_type": "値上げ要請",
+   "status": "完了",
+   "current_price": 605,
+   "proposed_price": 620,
+   "volume_kg_month": 17500,
+   "annual_volume_kg": 210000,
+   "proposed_conditions": "為替影響を主張",
+   "claimed_reasons": "為替影響",
+   "valid_until": "2026-03-31",
+   "created_by": "佐藤",
+   "data_origin": "初期データ"
+  },
+  {
+   "case_no": "No.123454-a",
+   "supplier_id": 1,
+   "spec_id": 1,
+   "period": "2026Q1",
+   "case_type": "契約更新",
+   "status": "完了",
+   "current_price": 612,
+   "proposed_price": 618,
+   "volume_kg_month": 17000,
+   "annual_volume_kg": 204000,
+   "proposed_conditions": "現行+6円で更新希望",
+   "claimed_reasons": "原材料・飼料価格",
+   "valid_until": "2025-12-20",
+   "created_by": "佐藤",
+   "data_origin": "初期データ"
+  },
+  {
+   "case_no": "No.123453-a",
+   "supplier_id": 1,
+   "spec_id": 1,
+   "period": "2025Q4",
+   "case_type": "値上げ要請",
+   "status": "完了",
+   "current_price": 598,
+   "proposed_price": 625,
+   "volume_kg_month": 16000,
+   "annual_volume_kg": 192000,
+   "proposed_conditions": "為替急変(¥152)による緊急改定",
+   "claimed_reasons": "為替影響,物流費・燃料費",
+   "valid_until": "2025-09-30",
+   "created_by": "田中",
+   "data_origin": "初期データ"
+  },
+  {
+   "case_no": "No.123452-a",
+   "supplier_id": 1,
+   "spec_id": 1,
+   "period": "2025Q3",
+   "case_type": "見積",
+   "status": "完了",
+   "current_price": 610,
+   "proposed_price": 615,
+   "volume_kg_month": 15000,
+   "annual_volume_kg": 180000,
+   "proposed_conditions": "新規スペックの初回見積",
+   "claimed_reasons": "不明・要確認",
+   "valid_until": "2025-06-30",
+   "created_by": "田中",
+   "data_origin": "初期データ"
+  }
+ ],
+ "strategy_sheets": [
+  {
+   "sheet_id": 1,
+   "case_no": "No.123456-a",
+   "price_diff": "+11",
+   "annual_impact": "+2,376,000",
+   "calc_version": "ルールv1.0",
+   "target_auto": 585,
+   "target_final": 585,
+   "landing_auto": 599,
+   "landing_final": 600,
+   "walkaway_auto": 615,
+   "walkaway_final": 615,
+   "line_edit_reason": "着地: 供給逼迫を考慮し+¥1",
+   "impact_target": "-5,184,000",
+   "impact_landing": "-1,944,000",
+   "impact_walkaway": "+1,296,000",
+   "ai_points": "①年間216tの数量コミットを提示しボリューム前提で¥585を要求 ②過去4回の決着598〜612・相場上昇基調のため¥600着地を落とし所に ③支払サイト短縮・複数商材同時契約は譲歩カードとして温存",
+   "ai_scenario": "オープニング: 数量拡大の意向を伝え¥585を提示 → 譲歩ゾーン: 相場上昇を認め¥595→¥600で段階的に歩み寄る → クロージング: ¥615超なら持ち帰り。年間契約とセットで再提案",
+   "saved_at": "2026-07-05 14:00",
+   "data_origin": "初期データ"
+  },
+  {
+   "sheet_id": 2,
+   "case_no": "No.123455-a",
+   "price_diff": "+15",
+   "annual_impact": "+3,150,000",
+   "calc_version": "ルールv0.9(暫定式)",
+   "target_auto": 590,
+   "target_final": 590,
+   "landing_auto": 603,
+   "landing_final": 605,
+   "walkaway_auto": 618,
+   "walkaway_final": 618,
+   "line_edit_reason": "着地: 端数調整+¥2",
+   "impact_target": "-3,150,000",
+   "impact_landing": "0",
+   "impact_walkaway": "+2,730,000",
+   "ai_points": "数量維持を条件に上昇幅の圧縮を要求 ほか",
+   "ai_scenario": "(省略)",
+   "saved_at": "2026-03-10 10:00",
+   "data_origin": "初期データ"
+  },
+  {
+   "sheet_id": 3,
+   "case_no": "No.123454-a",
+   "price_diff": "+6",
+   "annual_impact": "+1,224,000",
+   "calc_version": "ルールv0.9(暫定式)",
+   "target_auto": 595,
+   "target_final": 595,
+   "landing_auto": 605,
+   "landing_final": 605,
+   "walkaway_auto": 620,
+   "walkaway_final": 620,
+   "line_edit_reason": "(算出どおり採用)",
+   "impact_target": "-3,468,000",
+   "impact_landing": "-1,428,000",
+   "impact_walkaway": "+1,632,000",
+   "ai_points": "唐揚げフェアの数量増を材料に据置き〜微増で更新 ほか",
+   "ai_scenario": "(省略)",
+   "saved_at": "2025-12-05 09:00",
+   "data_origin": "初期データ"
+  },
+  {
+   "sheet_id": 4,
+   "case_no": "No.123453-a",
+   "price_diff": "+27",
+   "annual_impact": "+5,184,000",
+   "calc_version": "ルールv0.9(暫定式)",
+   "target_auto": 595,
+   "target_final": 595,
+   "landing_auto": 608,
+   "landing_final": 610,
+   "walkaway_auto": 620,
+   "walkaway_final": 625,
+   "line_edit_reason": "着地+2/撤退+5: 為替急変を反映",
+   "impact_target": "-576,000",
+   "impact_landing": "+2,304,000",
+   "impact_walkaway": "+5,184,000",
+   "ai_points": "為替の実勢確認と適用時期の後ろ倒しを要求 ほか",
+   "ai_scenario": "(省略)",
+   "saved_at": "2025-09-12 15:00",
+   "data_origin": "初期データ"
+  },
+  {
+   "sheet_id": 5,
+   "case_no": "No.123452-a",
+   "price_diff": "+5",
+   "annual_impact": "+900,000",
+   "calc_version": "ルールv0.9(暫定式)",
+   "target_auto": 590,
+   "target_final": 590,
+   "landing_auto": 600,
+   "landing_final": 600,
+   "walkaway_auto": 615,
+   "walkaway_final": 615,
+   "line_edit_reason": "(算出どおり採用)",
+   "impact_target": "-3,600,000",
+   "impact_landing": "-1,800,000",
+   "impact_walkaway": "+900,000",
+   "ai_points": "初回のため相場基準で強気に設定 ほか",
+   "ai_scenario": "(省略)",
+   "saved_at": "2025-06-15 11:00",
+   "data_origin": "初期データ"
+  }
+ ],
+ "negotiation_results": [
+  {
+   "result_id": 1,
+   "case_no": "No.123455-a",
+   "result_date": "2026-03-15",
+   "final_price": 609,
+   "delivery_term": "2026/04〜06 月2回",
+   "payment_site": "月末締め翌月末払い",
+   "vs_quote": "-11",
+   "vs_landing": "+4",
+   "achievement": "60%",
+   "result_tags": "相場上昇を反映",
+   "accepted_reasons": "為替影響",
+   "staff_memo": "数量提示が遅れ押し込まれ気味",
+   "handover_note": "次回は前倒しで数量提示を",
+   "prep_hours": "3.0",
+   "data_origin": "初期データ"
+  },
+  {
+   "result_id": 2,
+   "case_no": "No.123454-a",
+   "result_date": "2025-12-10",
+   "final_price": 605,
+   "delivery_term": "2026/01〜03 月2回",
+   "payment_site": "月末締め翌月末払い",
+   "vs_quote": "-13",
+   "vs_landing": "0",
+   "achievement": "100%",
+   "result_tags": "数量コミットで譲歩獲得,年間契約とセット",
+   "accepted_reasons": "（変動理由は認めず数量条件で決着）",
+   "staff_memo": "着地ライン通り。年間契約の打診が効いた",
+   "handover_note": "年間契約の本締結を2026Q3に協議",
+   "prep_hours": "2.0",
+   "data_origin": "初期データ"
+  },
+  {
+   "result_id": 3,
+   "case_no": "No.123453-a",
+   "result_date": "2025-09-18",
+   "final_price": 612,
+   "delivery_term": "2025/10〜12 月2回",
+   "payment_site": "月末締め翌々月10日→翌月末に短縮",
+   "vs_quote": "-13",
+   "vs_landing": "+2",
+   "achievement": "65%",
+   "result_tags": "相場上昇を反映,為替影響",
+   "accepted_reasons": "為替影響（物流費は認めず）",
+   "staff_memo": "為替(¥152)で難航。撤退寸前まで押し込まれた",
+   "handover_note": "為替条項(¥150超で再協議)の検討を申し送り",
+   "prep_hours": "4.0",
+   "data_origin": "初期データ"
+  },
+  {
+   "result_id": 4,
+   "case_no": "No.123452-a",
+   "result_date": "2025-06-20",
+   "final_price": 598,
+   "delivery_term": "2025/07〜09 月2回",
+   "payment_site": "月末締め翌月末払い",
+   "vs_quote": "-17",
+   "vs_landing": "-2",
+   "achievement": "110%",
+   "result_tags": "数量コミットで譲歩獲得",
+   "accepted_reasons": "（初回のため主張なし）",
+   "staff_memo": "数量増(+2,000kg/月)で目標超え決着",
+   "handover_note": "数量カードは丸紅に有効",
+   "prep_hours": "2.5",
+   "data_origin": "初期データ"
+  }
+ ],
+ "rate_change_reasons": [
+  {
+   "reason_id": "RC-01",
+   "reason_name": "供給不安",
+   "impact_direction": "↑",
+   "description": "産地の疫病(鳥インフル・豚熱)・天候不順・減産などによる供給量の減少"
+  },
+  {
+   "reason_id": "RC-02",
+   "reason_name": "需要増加",
+   "impact_direction": "↑",
+   "description": "外食需要の回復・輸出増・季節需要などによる引き合いの増加"
+  },
+  {
+   "reason_id": "RC-03",
+   "reason_name": "為替影響",
+   "impact_direction": "±",
+   "description": "円安=輸入品の値上げ圧力↑、円高=値下げ余地↓。合意時は前提レートを記録する"
+  },
+  {
+   "reason_id": "RC-04",
+   "reason_name": "原材料・飼料価格",
+   "impact_direction": "±",
+   "description": "飼料(とうもろこし・大豆粕)・原料肉などの国際価格の変動"
+  },
+  {
+   "reason_id": "RC-05",
+   "reason_name": "物流費・燃料費",
+   "impact_direction": "↑",
+   "description": "海上運賃・国内配送費・燃料サーチャージの上昇"
+  },
+  {
+   "reason_id": "RC-06",
+   "reason_name": "人件費・加工費",
+   "impact_direction": "↑",
+   "description": "産地・加工場の労務費、カット/包装などの加工賃の上昇"
+  },
+  {
+   "reason_id": "RC-07",
+   "reason_name": "品質・規格変更",
+   "impact_direction": "±",
+   "description": "グレード・サイズ・荷姿・認証(ASC等)の変更に伴う価格差"
+  },
+  {
+   "reason_id": "RC-08",
+   "reason_name": "取引条件変更",
+   "impact_direction": "±",
+   "description": "数量・支払サイト・納品頻度・契約期間などの条件変更に伴う調整"
+  },
+  {
+   "reason_id": "RC-09",
+   "reason_name": "政策・規制",
+   "impact_direction": "±",
+   "description": "関税・輸入規制・補助金・環境規制などの制度要因"
+  },
+  {
+   "reason_id": "RC-10",
+   "reason_name": "不明・要確認",
+   "impact_direction": "±",
+   "description": "理由の裏づけが未確認。交渉前に根拠の提示を求めること"
+  }
+ ]
+}
