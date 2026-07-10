@@ -40,6 +40,12 @@ class AuthUser(CamelModel):
     role: Literal["member", "admin"] = "member"
 
 
+class GoogleAuthRequest(CamelModel):
+    """GIS のコールバックが返す credential（ID トークン）を送る。"""
+
+    credential: str
+
+
 # ---- 案件 --------------------------------------------------------------------
 CaseStatus = Literal["before", "negotiating", "done"]
 WorkspaceStep = Literal["collect", "lines", "strategy", "result"]

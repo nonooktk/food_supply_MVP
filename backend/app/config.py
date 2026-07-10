@@ -75,6 +75,13 @@ class Settings(BaseSettings):
     # true のときスタブ実装を DI で注入し、外部サービス未接続でも本体を起動できる。
     use_kre_stub: bool = Field(True, alias="USE_KRE_STUB")
 
+    # ===== 認証シーム =====
+    # ログイン方式の切替。mock=モックヘッダー/フォーム（開発・テスト） / google=Google Identity Services。
+    # 将来 Entra へ移行する場合は "entra" を足し、対応する検証実装を auth 層に追加するだけでよい。
+    auth_mode: str = Field("mock", alias="AUTH_MODE")
+    # Google のクライアントID（aud 検証に使用。秘匿値ではない）。google モードでは必須。
+    google_client_id: str = Field("", alias="GOOGLE_CLIENT_ID")
+
     # ===== CORS =====
     cors_origins_raw: str = Field("http://localhost:3000", alias="CORS_ORIGINS")
 

@@ -41,6 +41,8 @@ export interface CaseListResult {
 /** フロント全体が依存する API 契約。実装（モック/実 API）を差し替え可能にする。 */
 export interface Api {
   login(tenant: string, userId: string, password: string): Promise<AuthUser>;
+  /** Google Identity Services の credential（IDトークン）を検証してログインする（認証シーム: google）。 */
+  googleAuth(credential: string): Promise<AuthUser>;
   listCases(filter: CaseListFilter): Promise<CaseListResult>;
   createCase(input: CaseCreateInput): Promise<CaseDetail>;
   getCase(caseNo: string): Promise<CaseDetail>;
@@ -93,6 +95,13 @@ class MockApi implements Api {
       // 原因を推測させない一般文言（デザインガイド §3.0）
       throw new Error("テナント・ID・パスワードのいずれかが正しくありません。");
     }
+    return { ...MOCK_AUTH_USER };
+  }
+
+  async googleAuth(): Promise<AuthUser> {
+    // モック時は Google 検証を行わず、デモユーザーとしてログインする（開発体験のため）。
+    // 実際の ID トークン検証は RealApi（NEXT_PUBLIC_USE_MOCK=false・バックエンド）で行う。
+    await delay(400);
     return { ...MOCK_AUTH_USER };
   }
 
@@ -356,6 +365,13 @@ class RealApi implements Api {
     return this.req<AuthUser>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ tenant, userId, password }),
+    });
+  }
+  googleAuth(credential: string): Promise<AuthUser> {
+    // GIS の credential をバックエンド（AUTH_MODE=google）で検証してログインする。
+    return this.req<AuthUser>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ credential }),
     });
   }
   listCases(filter: CaseListFilter): Promise<CaseListResult> {

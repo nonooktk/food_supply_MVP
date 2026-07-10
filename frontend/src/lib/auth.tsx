@@ -15,6 +15,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean; // 初期復元中か
   login: (tenant: string, userId: string, password: string) => Promise<void>;
+  /** Google Identity Services の credential でログインする（認証シーム: google）。 */
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -45,14 +47,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
   }, []);
 
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    const u = await api.googleAuth(credential);
+    setUser(u);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+  }, []);
+
   const logout = useCallback(() => {
     setUser(null);
     window.localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, login, logout }),
-    [user, loading, login, logout],
+    () => ({ user, loading, login, loginWithGoogle, logout }),
+    [user, loading, login, loginWithGoogle, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

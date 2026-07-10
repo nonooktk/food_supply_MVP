@@ -1,16 +1,24 @@
 "use client";
 
 // ログイン画面（デザインガイド §3.0）
-// LoginForm（テナント/ID/PW）＋ SSOButton（Entra は Sprint 2・枠のみ）。
-// 認証失敗時はフォーム下に赤文字（原因を推測させない一般文言）。ローディング中はボタン disabled。
-import { useEffect, useState } from "react";
+// 認証シーム: モックフォーム（テナント/ID/PW・開発用）＋ Google でログイン（GIS・統合/デモ）。
+// - AUTH_MODE はバックエンドが実際の可否を決める（mock/google 排他）。画面は両方を提示し、
+//   下部に現在の認証モードを表示する。
+// - Google ボタンは NEXT_PUBLIC_GOOGLE_CLIENT_ID が必要（GIS の「承認済み JavaScript 生成元」依存）。
+//   未設定時は無効表示＋案内文にフォールバックする。
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { MOCK_CREDENTIAL } from "@/lib/mock/data";
+import { loadGsiScript, type GsiCredentialResponse } from "@/lib/gsi";
+
+// クライアントID（秘匿値ではない）。ビルド時に NEXT_PUBLIC_GOOGLE_CLIENT_ID から埋め込む。
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+const AUTH_MODE = process.env.NEXT_PUBLIC_AUTH_MODE || "mock";
 
 export default function LoginPage() {
-  const { user, loading: authLoading, login } = useAuth();
+  const { user, loading: authLoading, login, loginWithGoogle } = useAuth();
   const router = useRouter();
 
   const [tenant, setTenant] = useState(MOCK_CREDENTIAL.tenant);
@@ -19,10 +27,68 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+  const [googleError, setGoogleError] = useState<string | null>(null);
+  const [googleBusy, setGoogleBusy] = useState(false);
+
   // 既ログインなら一覧へ
   useEffect(() => {
     if (!authLoading && user) router.replace("/cases");
   }, [authLoading, user, router]);
+
+  // GIS コールバック: credential をバックエンドで検証してログイン
+  async function handleCredential(res: GsiCredentialResponse) {
+    if (!res.credential) {
+      setGoogleError("Google 認証に失敗しました。もう一度お試しください。");
+      return;
+    }
+    setGoogleBusy(true);
+    setGoogleError(null);
+    try {
+      await loginWithGoogle(res.credential);
+      router.replace("/cases");
+    } catch (err) {
+      setGoogleError(err instanceof Error ? err.message : "Google 認証に失敗しました。");
+      setGoogleBusy(false);
+    }
+  }
+
+  // GIS スクリプトを読み込み、公式ボタンを描画する（クライアントID未設定時は描画しない）
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    let alive = true;
+    (async () => {
+      try {
+        const google = await loadGsiScript();
+        if (!alive) return;
+        google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (r) => {
+            void handleCredential(r);
+          },
+          cancel_on_tap_outside: true,
+        });
+        if (googleBtnRef.current) {
+          google.accounts.id.renderButton(googleBtnRef.current, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            text: "signin_with",
+            shape: "rectangular",
+            width: 320,
+            locale: "ja",
+          });
+        }
+      } catch {
+        if (alive) setGoogleError("Google ログインの読み込みに失敗しました。");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // 初期化は一度でよい（handleCredential は毎レンダー生成されるが依存に含めない）。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +116,46 @@ export default function LoginPage() {
           </div>
           <h1 className="mt-2 text-xl font-bold text-slate-900">ふりぃらじかるず</h1>
           <p className="text-sm text-slate-500">購買交渉支援</p>
+        </div>
+
+        {/* Google でログイン（認証シーム: google。GIS 公式ボタン） */}
+        <div className="space-y-2">
+          {GOOGLE_CLIENT_ID ? (
+            <>
+              {googleBusy ? (
+                <div className="flex h-11 items-center justify-center text-sm text-slate-500">
+                  認証中…
+                </div>
+              ) : (
+                <div ref={googleBtnRef} className="flex justify-center" />
+              )}
+              {googleError && (
+                <p role="alert" className="text-sm text-red-600">
+                  {googleError}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <Button
+                variant="secondary"
+                className="w-full"
+                disabled
+                title="Google クライアントID未設定（GCP 設定後に有効化）"
+              >
+                Google でログイン
+              </Button>
+              <p className="text-xs text-slate-400">
+                Google ログインは準備中です（クライアントID未設定）。GCP 設定後に有効化されます。
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" />
+          または（開発用ログイン）
+          <span className="h-px flex-1 bg-slate-200" />
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4" noValidate>
@@ -102,18 +208,9 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        <div className="my-4 flex items-center gap-3 text-xs text-slate-400">
-          <span className="h-px flex-1 bg-slate-200" />
-          または
-          <span className="h-px flex-1 bg-slate-200" />
-        </div>
-
-        {/* SSO は Sprint 2（Entra External ID）。枠のみで無効表示。 */}
-        <Button variant="secondary" className="w-full" disabled title="Sprint 2 で対応（Entra External ID）">
-          Microsoft でサインイン
-        </Button>
-
         <p className="mt-6 text-center text-xs text-slate-400">
+          認証モード: <span className="font-medium text-slate-500">{AUTH_MODE}</span>
+          <br />
           デモ用: {MOCK_CREDENTIAL.tenant} / {MOCK_CREDENTIAL.userId} / {MOCK_CREDENTIAL.password}
         </p>
       </div>
