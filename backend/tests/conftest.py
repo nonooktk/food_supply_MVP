@@ -2,10 +2,17 @@
 
 実 DB（freeradicals.db）に触れず、テストごとにインメモリ SQLite を新規生成する。
 外部キー制約を有効化し、テナントスコープ FK が実際に効くことを検証できるようにする。
+
+【実 DB 隔離（belt-and-suspenders）】:
+現状テストはインメモリ engine のみ使うが、SQLITE_PATH が cwd 非依存の絶対パス（backend/
+freeradicals.db）に解決されるため、万一テストが実エンジン（get_engine / get_sessionmaker）を
+使うと開発用 DB を壊しうる。これを機構的に防ぐため、テストセッション全体で SQLITE_PATH を
+一時ディレクトリの DB へ強制上書きする（下記 _isolate_sqlite_from_real_db・autouse）。
 """
 
 from __future__ import annotations
 
+import os
 import uuid
 from dataclasses import dataclass
 
@@ -16,6 +23,38 @@ from sqlalchemy.pool import StaticPool
 
 from app.db import models as m
 from app.db.models import Base
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _isolate_sqlite_from_real_db(tmp_path_factory):
+    """テストが実 SQLITE_PATH（開発用 DB）に絶対に触れないよう、一時 DB へ隔離する。
+
+    実エンジンを使うテストが将来混入しても、接続先は必ず一時ファイルになる。lru_cache された
+    設定・エンジン・セッションファクトリを無効化して確実に反映させる。
+    """
+    from app.config import get_settings
+    from app.db import database
+
+    tmp_db = tmp_path_factory.mktemp("frd_isolated_db") / "test.db"
+    saved = {k: os.environ.get(k) for k in ("DB_BACKEND", "SQLITE_PATH")}
+    os.environ["DB_BACKEND"] = "sqlite"
+    os.environ["SQLITE_PATH"] = str(tmp_db)
+
+    def _reset_caches() -> None:
+        get_settings.cache_clear()
+        database.get_engine.cache_clear()
+        database.get_sessionmaker.cache_clear()
+
+    _reset_caches()
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        _reset_caches()
 
 
 def _memory_engine():
