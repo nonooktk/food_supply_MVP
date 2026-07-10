@@ -1,0 +1,52 @@
+# ==============================================================================
+# ふりぃらじかるず — .gitignore
+# 秘匿値・ビルド成果物・依存物をコミット対象から除外する（セキュリティ規定）。
+# ==============================================================================
+
+# ----- 秘匿情報（.env は絶対にコミットしない） -----
+.env
+.env.*
+!.env.example
+*.env
+
+# ----- Python -----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ----- 仮想環境 -----
+.venv/
+venv/
+env/
+
+# ----- SQLite（ローカル開発用DB） -----
+*.db
+*.sqlite
+*.sqlite3
+
+# ----- Node / Next.js（frontend。イーブイが scaffold） -----
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# ----- OS / エディタ -----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# ----- ログ・一時ファイル -----
+*.log
+logs/
+tmp/
