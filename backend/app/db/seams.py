@@ -95,8 +95,10 @@ CALC_RULE_V1: dict = {
             "desc": "着地 = clamp(0.5×過去平均 + 0.3×計画単価 + 0.2×相場, 目標, 撤退)",
         },
         "walkaway": {
-            "formula": "min(max_acceptable_price, current_price * (1 + yoy_rate + 0.02))",
-            "desc": "撤退 = min(許容上限, 現行×(1 + 相場前年比 + 2pt))",
+            "formula": "min(max_acceptable_price, current_price * (1 + max(0, yoy_rate) + 0.02))",
+            "desc": "撤退 = min(許容上限, 現行×(1 + max(0, 相場前年比) + 2pt))。"
+            "下落局面（前年比<0）は0扱いとし、撤退は常に現行+2ptを保つ"
+            "（GraphRAG評価用期待解v1の答え合わせ・2026-07-11で確定した解釈）。",
         },
     },
     "params": {"landing_weights": {"past_avg": 0.5, "plan_price": 0.3, "market_rate": 0.2},
