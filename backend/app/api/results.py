@@ -106,7 +106,8 @@ def _build_record(
         delivery_timing=result.delivery_term or "",
         payment_terms=result.payment_site or "",
         reason_codes=list(result.accepted_reasons or []),
-        note=result.staff_memo or "",
+        staff_memo=result.staff_memo or "",  # 所感（今回の記録）
+        handover_note=result.handover_note or "",  # 次回への申し送り（次回の判断材料）
         quote_diff_pct=_quote_diff_pct(settled, quoted),
         achievement_pct=float(result.achievement) if result.achievement is not None else 0.0,
         case_no=case.case_no,
@@ -162,7 +163,8 @@ def save_result(
     result.achievement = achievement
     result.result_tags = list(body.reason_codes)
     result.accepted_reasons = list(body.reason_codes)
-    result.staff_memo = body.note
+    result.staff_memo = body.staff_memo  # 所感 → staff_memo
+    result.handover_note = body.handover_note  # 申し送り → handover_note（issue #6）
     result.data_origin = "アプリ登録"
 
     # 案件ステータスを完了へ（BR-10: 以後この決着は同一スペックの新案件の過去経緯に現れる）。

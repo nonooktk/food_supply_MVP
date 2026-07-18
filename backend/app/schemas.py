@@ -201,7 +201,9 @@ class ResultInput(CamelModel):
     delivery_timing: str = ""
     payment_terms: str = ""
     reason_codes: list[str] = Field(default_factory=list)  # 決着理由タグ（RC-xx・複数選択）
-    note: str = ""
+    # 所感（今回案件の記録）／申し送り（次回案件への判断材料）を別項目で保持（issue #6）。
+    staff_memo: str = ""  # 所感（今回の記録）→ negotiation_results.staff_memo
+    handover_note: str = ""  # 次回への申し送り（次回の判断材料）→ handover_note
 
 
 class ResultRecord(CamelModel):
@@ -211,7 +213,8 @@ class ResultRecord(CamelModel):
     delivery_timing: str
     payment_terms: str
     reason_codes: list[str]
-    note: str
+    staff_memo: str  # 所感（今回案件の記録）
+    handover_note: str  # 次回への申し送り（次回案件への判断材料）
     quote_diff_pct: float  # 見積比（%。マイナスは見積より安く決着）
     achievement_pct: float  # 目標達成度（%）
     case_no: str
