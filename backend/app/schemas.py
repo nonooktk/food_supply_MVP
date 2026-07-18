@@ -69,7 +69,7 @@ class CaseListResult(CamelModel):
 
 
 class CaseCreateInput(CamelModel):
-    company: str
+    supplier_id: int
     product: str
     quoted_price: float
     target_period: str
@@ -77,6 +77,15 @@ class CaseCreateInput(CamelModel):
 
 class CaseStatusUpdate(CamelModel):
     status: CaseStatus
+
+
+class SupplierInfo(CamelModel):
+    """案件作成時に選択する、テナント内の取引先マスタ。"""
+
+    supplier_id: int
+    supplier_name: str
+    supplier_category: str | None = None
+    supplier_memo: str | None = None
 
 
 # ---- 相場 --------------------------------------------------------------------

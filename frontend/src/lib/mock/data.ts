@@ -10,6 +10,7 @@ import type {
   PastCase,
   RateInfo,
   ReasonTag,
+  Supplier,
 } from "@/lib/types";
 
 /** 案件一覧の初期データ（デザインガイド §3.1 のサンプル行を踏襲） */
@@ -206,6 +207,14 @@ export const MOCK_AUTH_USER = {
   displayName: "田中 太郎",
   role: "member" as const,
 };
+
+/** 案件作成の選択肢。実 API と同じ取引先マスタ契約をモックでも提供する。 */
+export const MOCK_SUPPLIERS: Supplier[] = [
+  { supplierId: 1, supplierName: "丸紅畜産", supplierCategory: "食肉（輸入鶏肉）", supplierMemo: "取引8年・数量重視" },
+  { supplierId: 2, supplierName: "伊藤忠食品", supplierCategory: "総合食品商社", supplierMemo: "冷凍食品を中心に取引" },
+  { supplierId: 3, supplierName: "日本ハム商事", supplierCategory: "食肉", supplierMemo: "チルド商材に強み" },
+  { supplierId: 4, supplierName: "三菱食品", supplierCategory: "総合食品商社", supplierMemo: "加工食品も取扱い" },
+];
 
 /** Citation を過去案件から平坦化して取り出すヘルパ */
 export function flattenCitations(cases: PastCase[]): Citation[] {

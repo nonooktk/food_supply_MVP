@@ -28,10 +28,18 @@ export interface CaseSummary {
 
 /** 案件作成フォームの入力（デザインガイド §3.1 作成モーダル / FR-01） */
 export interface CaseCreateInput {
-  company: string;
+  supplierId: number;
   product: string;
   quotedPrice: number; // 提出見積（円/kg）
   targetPeriod: string; // 交渉時期
+}
+
+/** 案件作成時に選択する取引先マスタ。 */
+export interface Supplier {
+  supplierId: number;
+  supplierName: string;
+  supplierCategory: string | null;
+  supplierMemo: string | null;
 }
 
 /** 案件詳細（ワークスペースのヘッダー表示に使用） */

@@ -47,23 +47,33 @@ def test_get_case_404(api) -> None:
 
 
 def test_create_case_and_numbering(api) -> None:
-    """作成すると NumberingService で No.500001〜 が採番される。"""
+    """登録済みの supplier_id で作成すると表示名と紐づき、採番される。"""
     res = api.client.post(
         "/api/cases",
         headers=api.headers(),
-        json={"company": "新規商社", "product": "冷凍エビ", "quotedPrice": 900, "targetPeriod": "2026Q4"},
+        json={"supplierId": 1, "product": "冷凍エビ", "quotedPrice": 900, "targetPeriod": "2026Q4"},
     )
     assert res.status_code == 201
     body = res.json()
     assert body["caseNo"] == "No.500001-a"
     assert body["status"] == "before"
-    assert body["company"] == "新規商社"
+    assert body["company"] == "丸紅畜産"
+
+
+def test_create_case_rejects_unregistered_supplier(api) -> None:
+    res = api.client.post(
+        "/api/cases",
+        headers=api.headers(),
+        json={"supplierId": 999999, "product": "冷凍エビ", "quotedPrice": 900, "targetPeriod": "2026Q4"},
+    )
+    assert res.status_code == 422
+    assert res.json()["title"] == "取引先が未登録です"
 
 
 def test_create_is_idempotent(api) -> None:
     """同一 Idempotency-Key の再送は同じ案件を返し、二重作成しない。"""
     headers = {**api.headers(), "Idempotency-Key": "abc-123"}
-    payload = {"company": "冪等商事", "product": "鶏ささみ", "quotedPrice": 500, "targetPeriod": "2026Q4"}
+    payload = {"supplierId": 1, "product": "鶏ささみ", "quotedPrice": 500, "targetPeriod": "2026Q4"}
     r1 = api.client.post("/api/cases", headers=headers, json=payload)
     r2 = api.client.post("/api/cases", headers=headers, json=payload)
     assert r1.json()["caseNo"] == r2.json()["caseNo"]
@@ -92,3 +102,29 @@ def test_tenant_isolation(api) -> None:
     # 別テナントから元テナントの案件詳細は 404
     res2 = api.client.get("/api/cases/No.123456-a", headers=api.headers(tenant_id=other))
     assert res2.status_code == 404
+
+
+def test_supplier_api_and_case_creation_are_tenant_scoped(api) -> None:
+    """取引先一覧・案件作成とも、他テナントの supplier_id を利用できない。"""
+    other = str(uuid.uuid4())
+    with api.new_session() as s:
+        s.add(m.Tenant(tenant_id=other, tenant_name="別テナント"))
+        s.add(m.Supplier(supplier_id=999, tenant_id=other, supplier_name="別テナント商事"))
+        s.commit()
+
+    own = api.client.get("/api/suppliers", headers=api.headers())
+    assert own.status_code == 200
+    assert all(item["supplierName"] != "別テナント商事" for item in own.json())
+
+    other_list = api.client.get("/api/suppliers", headers=api.headers(tenant_id=other))
+    assert other_list.status_code == 200
+    assert other_list.json() == [
+        {"supplierId": 999, "supplierName": "別テナント商事", "supplierCategory": None, "supplierMemo": None}
+    ]
+
+    cross_tenant = api.client.post(
+        "/api/cases",
+        headers=api.headers(),
+        json={"supplierId": 999, "product": "冷凍エビ", "quotedPrice": 900, "targetPeriod": "2026Q4"},
+    )
+    assert cross_tenant.status_code == 422

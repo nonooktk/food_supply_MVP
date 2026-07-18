@@ -15,7 +15,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, cases, health, lines, plans, rates, results, search, strategy
+from app.api import auth, cases, health, lines, plans, rates, results, search, strategy, suppliers
 from app.config import get_settings
 from app.errors import register_exception_handlers
 
@@ -47,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(auth.router, prefix="/api")
     app.include_router(cases.router, prefix="/api")
+    app.include_router(suppliers.router, prefix="/api")
     app.include_router(rates.router, prefix="/api")
     app.include_router(plans.router, prefix="/api")
     app.include_router(lines.router, prefix="/api")

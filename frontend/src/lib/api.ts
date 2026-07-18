@@ -12,6 +12,7 @@ import {
   MOCK_PAST_CASES,
   MOCK_RATES,
   MOCK_REASON_TAGS,
+  MOCK_SUPPLIERS,
 } from "@/lib/mock/data";
 import * as store from "@/lib/store";
 import type {
@@ -28,6 +29,7 @@ import type {
   ResultInput,
   ResultRecord,
   StrategyDraft,
+  Supplier,
   ThreeLine,
   ThreeLineResult,
 } from "@/lib/types";
@@ -49,6 +51,7 @@ export interface Api {
   /** Google Identity Services の credential（IDトークン）を検証してログインする（認証シーム: google）。 */
   googleAuth(credential: string): Promise<AuthUser>;
   listCases(filter: CaseListFilter): Promise<CaseListResult>;
+  listSuppliers(): Promise<Supplier[]>;
   createCase(input: CaseCreateInput): Promise<CaseDetail>;
   getCase(caseNo: string): Promise<CaseDetail>;
   getRateInfo(caseNo: string): Promise<RateInfo>;
@@ -143,12 +146,19 @@ class MockApi implements Api {
     return { items, total: items.length };
   }
 
+  async listSuppliers(): Promise<Supplier[]> {
+    await delay(200);
+    return MOCK_SUPPLIERS.map((supplier) => ({ ...supplier }));
+  }
+
   async createCase(input: CaseCreateInput): Promise<CaseDetail> {
     await delay(400);
+    const supplier = MOCK_SUPPLIERS.find((item) => item.supplierId === input.supplierId);
+    if (!supplier) throw new Error("取引先が未登録です");
     const caseNo = store.nextCaseNo();
     const summary = {
       caseNo,
-      company: input.company,
+      company: supplier.supplierName,
       product: input.product,
       status: "before" as CaseStatus,
       updatedAt: formatToday(),
@@ -464,6 +474,9 @@ class RealApi implements Api {
     if (filter.keyword) q.set("keyword", filter.keyword);
     if (filter.status && filter.status !== "all") q.set("status", filter.status);
     return this.req<CaseListResult>(`/cases?${q.toString()}`);
+  }
+  listSuppliers(): Promise<Supplier[]> {
+    return this.req<Supplier[]>("/suppliers");
   }
   createCase(input: CaseCreateInput): Promise<CaseDetail> {
     // 冪等キーで二重作成を防ぐ（再送・ダブルクリック対策）。

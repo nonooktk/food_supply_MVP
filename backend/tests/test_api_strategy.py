@@ -86,7 +86,7 @@ def test_get_before_generate_is_null(api) -> None:
     created = api.client.post(
         "/api/cases",
         headers=api.headers(),
-        json={"company": "初取引社", "product": "冷凍エビ", "quotedPrice": 900, "targetPeriod": "2026Q4"},
+        json={"supplierId": 1, "product": "冷凍エビ", "quotedPrice": 900, "targetPeriod": "2026Q4"},
     ).json()
     res = api.client.get(f"/api/cases/{created['caseNo']}/strategy", headers=api.headers())
     assert res.status_code == 200

@@ -54,16 +54,6 @@ def list_cases(
     return CaseListResult(items=items, total=len(items))
 
 
-def _resolve_supplier(repo: TenantScopedRepository, company: str) -> int:
-    """取引先名から supplier_id を解決（無ければ作成）。"""
-    found = repo.list(m.Supplier, m.Supplier.supplier_name == company)
-    if found:
-        return found[0].supplier_id
-    sup = repo.add(m.Supplier(supplier_name=company))
-    repo.session.flush()
-    return sup.supplier_id
-
-
 def _resolve_spec(repo: TenantScopedRepository, product_name: str) -> int:
     """商材表示名から spec_id を解決（無ければ商材＋スペックを最小作成）。
 
@@ -102,7 +92,12 @@ def create_case(
         if cached is not None:
             return cached
 
-    supplier_id = _resolve_supplier(repo, body.company.strip())
+    # supplier_id はテナントスコープ済み Repository で確認する。他テナントの ID も
+    # 見つからないため、取引先マスタを経由しない案件作成・テナント越境をともに防ぐ。
+    supplier = repo.get(m.Supplier, supplier_id=body.supplier_id)
+    if supplier is None:
+        raise ApiProblem(422, "取引先が未登録です", detail="登録済みの取引先を選択してください。")
+
     spec_id = _resolve_spec(repo, body.product.strip())
     # 採番は内部ユーティリティ（tenant 必須・Repository 外の例外。numbering.py の説明参照）。
     case_no = _numbering.next_case_no(repo.session, tenant_id)
@@ -110,7 +105,7 @@ def create_case(
     case = repo.add(
         m.NegotiationCase(
             case_no=case_no,
-            supplier_id=supplier_id,
+            supplier_id=supplier.supplier_id,
             spec_id=spec_id,
             period=body.target_period,
             status="交渉前",
