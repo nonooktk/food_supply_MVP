@@ -145,6 +145,27 @@ def test_new_fields_take_priority_over_legacy_note(api) -> None:
     assert saved["handoverNote"] == "新申し送り"
 
 
+def test_explicit_empty_staff_memo_does_not_fall_back_to_note(api) -> None:
+    """後方互換（issue #6 レビュー是正・細部）: 明示的な空文字 staffMemo は note にフォールバックしない。
+
+    未送信（None）と明示的空文字（""）を区別し、{staffMemo: "", note: "x"} では
+    所感を "" として尊重する（クリア指示を旧 note で上書きしない）。
+    """
+    payload = {
+        "settledPrice": 600,
+        "deliveryTiming": "",
+        "paymentTerms": "",
+        "reasonCodes": ["RC-01"],
+        "staffMemo": "",  # 明示的な空（クリア指示）
+        "note": "旧note（フォールバックされてはならない）",
+    }
+    saved = api.client.post(
+        "/api/cases/No.123456-a/result", headers=api.headers(), json=payload
+    ).json()
+    assert saved["staffMemo"] == ""  # note にフォールバックしない
+    assert saved["handoverNote"] == ""
+
+
 def test_get_restores_legacy_row_with_only_staff_memo(api) -> None:
     """旧スキーマ時代の行（staff_memo のみ値・handover_note は NULL）でも GET が正しく復元する。
 
