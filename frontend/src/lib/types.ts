@@ -53,6 +53,13 @@ export interface RateInfo {
   note: string; // 補足（表記ゆれ補正など）
 }
 
+/** 手入力する相場情報（FR-02）。出典は将来の根拠表示・AI 連携用に保存する。 */
+export interface RateManualInput {
+  yearMonth: string; // YYYY-MM
+  priceYenKg: number;
+  source?: string;
+}
+
 /** 過去経緯の引用元（デザインガイド §4.4 CitationBadge / KRE RetrieveResult.citations 相当） */
 export interface Citation {
   caseNo: string;

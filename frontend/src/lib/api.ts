@@ -23,6 +23,7 @@ import type {
   PastCase,
   PastCaseResult,
   RateInfo,
+  RateManualInput,
   ReasonTag,
   ResultInput,
   ResultRecord,
@@ -51,6 +52,7 @@ export interface Api {
   createCase(input: CaseCreateInput): Promise<CaseDetail>;
   getCase(caseNo: string): Promise<CaseDetail>;
   getRateInfo(caseNo: string): Promise<RateInfo>;
+  saveManualRate(caseNo: string, input: RateManualInput): Promise<RateInfo>;
   getPastCases(caseNo: string): Promise<PastCaseResult>;
   getCompanyPlan(caseNo: string): Promise<CompanyPlan>;
   saveCompanyPlan(caseNo: string, plan: CompanyPlan): Promise<CompanyPlan>;
@@ -163,6 +165,21 @@ class MockApi implements Api {
 
   async getRateInfo(caseNo: string): Promise<RateInfo> {
     await delay(250);
+    const manualRates = store.loadStore().manualRates?.[caseNo];
+    if (manualRates && Object.keys(manualRates).length > 0) {
+      const latestManual = Object.values(manualRates).sort((a, b) =>
+        a.yearMonth.localeCompare(b.yearMonth),
+      ).at(-1);
+      const base = MOCK_RATES[caseNo];
+      return {
+        latestPrice: latestManual?.priceYenKg ?? base?.latestPrice ?? 0,
+        currentPrice: base?.currentPrice ?? 0,
+        yoyRate: base?.yoyRate ?? 0,
+        unit: "円/kg",
+        normalizedCount: (base?.normalizedCount ?? 0) + Object.keys(manualRates).length,
+        note: "手入力の相場情報を保存しました。",
+      };
+    }
     return (
       MOCK_RATES[caseNo] ?? {
         latestPrice: 0,
@@ -171,6 +188,11 @@ class MockApi implements Api {
         note: "相場データ未登録です。手入力または CSV 取込で登録してください。",
       }
     );
+  }
+
+  async saveManualRate(caseNo: string, input: RateManualInput): Promise<RateInfo> {
+    await delay(300);
+    return store.saveManualRate(caseNo, input);
   }
 
   async getPastCases(caseNo: string): Promise<PastCaseResult> {
@@ -448,6 +470,12 @@ class RealApi implements Api {
   }
   getRateInfo(caseNo: string): Promise<RateInfo> {
     return this.req<RateInfo>(`/cases/${encodeURIComponent(caseNo)}/rate`);
+  }
+  saveManualRate(caseNo: string, input: RateManualInput): Promise<RateInfo> {
+    return this.req<RateInfo>(`/cases/${encodeURIComponent(caseNo)}/rate/manual`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
   getPastCases(caseNo: string): Promise<PastCaseResult> {
     return this.req<PastCaseResult>(`/cases/${encodeURIComponent(caseNo)}/past-cases`);

@@ -89,6 +89,14 @@ class RateInfo(CamelModel):
     note: str = ""
 
 
+class RateManualInput(CamelModel):
+    """手入力する相場情報（FR-02）。"""
+
+    year_month: str = Field(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")
+    price_yen_kg: float = Field(gt=0)
+    source: str | None = None
+
+
 # ---- 過去経緯（KRE / DB） ----------------------------------------------------
 class Citation(CamelModel):
     case_no: str

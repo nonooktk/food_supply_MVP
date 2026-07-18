@@ -38,3 +38,61 @@ def test_put_plan_upsert(api) -> None:
 def test_rate_404(api) -> None:
     res = api.client.get("/api/cases/No.NOPE/rate", headers=api.headers())
     assert res.status_code == 404
+
+
+def test_post_manual_rate_upsert(api) -> None:
+    body = {"yearMonth": "2026-07", "priceYenKg": 600, "source": "担当者確認"}
+    res = api.client.post("/api/cases/No.123456-a/rate/manual", headers=api.headers(), json=body)
+    assert res.status_code == 200
+    saved = res.json()
+    assert saved["latestPrice"] == 600
+    assert saved["normalizedCount"] == 13
+    assert saved["note"]
+
+    got = api.client.get("/api/cases/No.123456-a/rate", headers=api.headers()).json()
+    assert got["latestPrice"] == 600
+    assert got["normalizedCount"] == 13
+
+
+def test_post_manual_rate_same_month_update(api) -> None:
+    body = {"yearMonth": "2026-06", "priceYenKg": 610, "source": "初回"}
+    first = api.client.post("/api/cases/No.123456-a/rate/manual", headers=api.headers(), json=body)
+    assert first.status_code == 200
+    second = api.client.post(
+        "/api/cases/No.123456-a/rate/manual",
+        headers=api.headers(),
+        json={"yearMonth": "2026-06", "priceYenKg": 620, "source": "更新"},
+    )
+    assert second.status_code == 200
+    assert second.json()["latestPrice"] == 620
+    assert second.json()["normalizedCount"] == 12
+
+
+def test_post_manual_rate_validation(api) -> None:
+    invalid_month = api.client.post(
+        "/api/cases/No.123456-a/rate/manual",
+        headers=api.headers(),
+        json={"yearMonth": "2025-13", "priceYenKg": 600},
+    )
+    assert invalid_month.status_code == 422
+    invalid_price = api.client.post(
+        "/api/cases/No.123456-a/rate/manual",
+        headers=api.headers(),
+        json={"yearMonth": "2026-01", "priceYenKg": 0},
+    )
+    assert invalid_price.status_code == 422
+    omitted_source = api.client.post(
+        "/api/cases/No.123456-a/rate/manual",
+        headers=api.headers(),
+        json={"yearMonth": "2026-01", "priceYenKg": 600},
+    )
+    assert omitted_source.status_code == 200
+
+
+def test_post_manual_rate_404(api) -> None:
+    res = api.client.post(
+        "/api/cases/No.NOPE/rate/manual",
+        headers=api.headers(),
+        json={"yearMonth": "2026-01", "priceYenKg": 600},
+    )
+    assert res.status_code == 404
