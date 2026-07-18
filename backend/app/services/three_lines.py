@@ -6,7 +6,7 @@ RFP デモの3ライン（目標585 / 着地599 / 撤退615）を再現する。
 
   目標   = max(相場, 0.95 × 過去最安)
   着地   = clamp(0.5×過去平均 + 0.3×計画単価 + 0.2×相場, 目標, 撤退)
-  撤退   = min(許容上限, 現行 × (1 + max(0, 相場前年比) + 2pt))  ※下落局面は0扱い
+  撤退   = min(許容上限, 現行 × (1 + max(0, 相場前年同月比) + 2pt))  ※下落局面は0扱い
   欠損時は相場・現行でフォールバックする。
 """
 
@@ -39,7 +39,7 @@ TARGET_PAST_MIN_RATIO = CALC_RULE_V1["params"]["target_past_min_ratio"]  # 0.95
 class RateInputs:
     market_rate: float  # 直近相場 ¥/kg
     current_price: float  # 現行仕入単価 ¥/kg
-    yoy_rate: float  # 相場前年比（小数。例 0.032）
+    yoy_rate: float  # 相場前年同月比（小数。例 0.032）
 
 
 @dataclass
@@ -74,8 +74,8 @@ def calc_auto_lines(rate: RateInputs, plan: PlanInputs, past_prices: list[float]
 
     # 目標 = max(相場, 0.95×過去最安)
     target = _round_half_up(max(market, TARGET_PAST_MIN_RATIO * past_min))
-    # 撤退 = min(許容上限, 現行×(1 + max(0, 相場前年比) + 2pt))
-    # 下落局面（前年比<0）は 0 扱い＝撤退は常に「現行+2pt」を保つ（CALC_RULE_V1 の確定解釈）。
+    # 撤退 = min(許容上限, 現行×(1 + max(0, 相場前年同月比) + 2pt))
+    # 下落局面（前年同月比<0）は 0 扱い＝撤退は常に「現行+2pt」を保つ（CALC_RULE_V1 の確定解釈）。
     walkaway = _round_half_up(
         min(plan.ceiling_price, current * (1 + max(0.0, yoy) + WALKAWAY_MARGIN_PT))
     )

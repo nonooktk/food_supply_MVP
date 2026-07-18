@@ -79,7 +79,16 @@ def test_build_context_text_contains_facts() -> None:
     assert "丸紅畜産" in text
     assert "目標 ¥585" in text and "着地 ¥600" in text and "撤退 ¥615" in text
     assert "No.123455-a" in text
-    assert "+6.4%" in text  # 前年比の整形
+    assert "+6.4%" in text  # 前年同月比の整形
+
+
+def test_build_context_text_yoy_none_shows_uncalculated() -> None:
+    """yoy_rate=None（未算出）のとき、前年同月比は 0% ではなく『未算出』と表記されること。"""
+    ctx = _ctx()
+    ctx.yoy_rate = None
+    text = build_context_text(ctx)
+    assert "前年同月比 未算出" in text
+    assert "+0.0%" not in text  # 未算出を 0% と誤表示しないこと
 
 
 def test_generate_escapes_braces(monkeypatch: pytest.MonkeyPatch) -> None:

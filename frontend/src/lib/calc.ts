@@ -4,7 +4,7 @@
 // 本ファイルの式は算出正本 CALC_RULE_V1（backend/app/db/seams.py L78-107）と一致させている。
 //   目標(target)   = max(相場, 0.95 × 過去最安)
 //   着地(landing)  = clamp(0.5×過去平均 + 0.3×計画単価 + 0.2×相場, 目標, 撤退)
-//   撤退(walkaway) = min(許容上限, 現行 × (1 + max(0, 相場前年比) + 2pt)) ※下落局面は0扱い
+//   撤退(walkaway) = min(許容上限, 現行 × (1 + max(0, 相場前年同月比) + 2pt)) ※下落局面は0扱い
 //   欠損時はフォールバック（過去情報が無い場合は相場・現行で代替）。
 // モック段階ではこの式でフロント側算出するが、実 API 接続時はバックエンドが
 // 同一の CALC_RULE_V1 で算出した結果を返す（lib/api.ts の RealApi で置換）。
@@ -66,8 +66,8 @@ export function calcAutoLines(
 
   // 目標 = max(相場, 0.95×過去最安)
   const target = Math.round(Math.max(market, TARGET_PAST_MIN_RATIO * pastMin));
-  // 撤退 = min(許容上限, 現行×(1 + max(0, 相場前年比) + 2pt))
-  // 下落局面（前年比<0）は 0 扱い＝撤退は常に「現行+2pt」を保つ（CALC_RULE_V1 の確定解釈）。
+  // 撤退 = min(許容上限, 現行×(1 + max(0, 相場前年同月比) + 2pt))
+  // 下落局面（前年同月比<0）は 0 扱い＝撤退は常に「現行+2pt」を保つ（CALC_RULE_V1 の確定解釈）。
   const walkaway = Math.round(
     Math.min(plan.ceilingPrice, current * (1 + Math.max(0, yoy) + WALKAWAY_MARGIN_PT)),
   );

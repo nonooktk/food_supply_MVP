@@ -56,7 +56,7 @@ export interface RateInfo {
   registered: boolean; // 相場が登録済みか（false=未登録。価格0と区別する。issue #3）
   latestPrice: number | null; // 直近相場 market_rate（円/kg。未登録時 null）
   currentPrice: number; // 現行仕入単価 current_price（円/kg。撤退ライン算出に使用）
-  yoyRate: number | null; // 相場前年比 yoy_rate（小数。例: 0.03 = +3%。未算出時 null）
+  yoyRate: number | null; // 相場前年同月比 yoy_rate（小数。例: 0.03 = +3%。未算出時 null）
   yearMonth?: string | null; // 対象年月 'YYYY-MM'（issue #7）
   source?: string | null; // 出典（issue #7・登録済み時のみ）
   inputMethod?: string | null; // 入力方法（手入力/CSV。issue #7 Want）

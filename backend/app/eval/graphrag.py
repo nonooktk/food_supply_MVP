@@ -67,7 +67,7 @@ def rule_s3(proposed: float, past: list[float]) -> str:
 
 
 def rule_s4(claimed: str | None, observed: str | None, yoy: float | None, source: str | None) -> str:
-    """S4: 理由一致かつ前年比>0=裏付けあり、証拠ありで不一致/非上昇=反証あり、証拠欠損=データ不足"""
+    """S4: 理由一致かつ前年同月比>0=裏付けあり、証拠ありで不一致/非上昇=反証あり、証拠欠損=データ不足"""
     has_evidence = bool(observed) and bool(source) and yoy is not None
     if not has_evidence:
         return "データ不足"
