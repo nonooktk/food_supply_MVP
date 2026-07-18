@@ -100,9 +100,15 @@ export function saveManualRate(caseNo: string, input: RateManualInput): RateInfo
   ).at(-1);
   const manualCount = Object.keys(s.manualRates[caseNo]).length;
   return {
-    latestPrice: latestManual?.priceYenKg ?? base?.latestPrice ?? 0,
+    registered: true,
+    latestPrice: latestManual?.priceYenKg ?? base?.latestPrice ?? null,
     currentPrice: base?.currentPrice ?? 0,
-    yoyRate: base?.yoyRate ?? 0,
+    // 手入力は前年同月比を再算出できないため未算出（null）扱い（issue #7 申し送り対応・backend と一致）。
+    yoyRate: null,
+    yearMonth: latestManual?.yearMonth ?? base?.yearMonth ?? null,
+    source: latestManual?.source ?? null,
+    inputMethod: "手入力",
+    updatedAt: new Date().toISOString(),
     unit: "円/kg",
     normalizedCount: (base?.normalizedCount ?? 0) + manualCount,
     note: "手入力の相場情報を保存しました。",

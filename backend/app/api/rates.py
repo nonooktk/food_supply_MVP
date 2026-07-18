@@ -31,21 +31,31 @@ def _to_rate_info(repo: TenantScopedRepository, case: m.NegotiationCase) -> Rate
     current_price = float(case.current_price) if case.current_price is not None else 0.0
 
     if latest is None:
+        # 相場未登録。価格0（実データ）と混同させないため registered=False とし、
+        # latest_price / yoy_rate は None を返す（issue #3）。
         return RateInfo(
-            latest_price=0.0,
+            registered=False,
+            latest_price=None,
             current_price=current_price,
-            yoy_rate=0.0,
+            yoy_rate=None,
             unit="円/kg",
             normalized_count=0,
             note=_NOTE_NO_DATA,
         )
 
     # DB の yoy_change は百分率（3.20 = +3.2%）。フロント契約は小数（0.032）。
-    yoy_rate = float(latest.yoy_change) / 100.0 if latest.yoy_change is not None else 0.0
+    # 手入力更新後などで yoy_change が未設定（None）の場合は「未算出」として None を返す
+    # （据え置き値との不整合を避ける。issue #7 申し送り対応）。
+    yoy_rate = float(latest.yoy_change) / 100.0 if latest.yoy_change is not None else None
     return RateInfo(
-        latest_price=float(latest.price_yen_kg) if latest.price_yen_kg is not None else 0.0,
+        registered=True,
+        latest_price=float(latest.price_yen_kg) if latest.price_yen_kg is not None else None,
         current_price=current_price,
         yoy_rate=yoy_rate,
+        year_month=latest.year_month,
+        source=latest.source,
+        input_method=latest.input_method,
+        updated_at=latest.updated_at.isoformat() if latest.updated_at is not None else None,
         unit="円/kg",
         normalized_count=count,
         note=_NOTE_WITH_DATA,
@@ -88,6 +98,10 @@ def save_manual_rate(
     rate.price_yen_kg = body.price_yen_kg
     rate.source = body.source.strip() or None if body.source is not None else None
     rate.input_method = "手入力"
+    # 手入力では前年同月比を再算出できない。CSV 由来の yoy_change を据え置くと価格と不整合に
+    # なるため、None（未算出）にクリアする（issue #7 申し送り対応）。3ライン/作戦シート算出は
+    # yoy_change=None を 0 として扱うため（lines.py / strategy.py）、撤退ラインは「現行+2pt」に収束する。
+    rate.yoy_change = None
     rate.import_batch_id = None
     repo.session.flush()
     repo.session.commit()

@@ -53,9 +53,11 @@ export function calcAutoLines(
   plan: CompanyPlan,
   pastCases: PastCase[],
 ): { target: number; landing: number; walkaway: number } {
-  const market = rate.latestPrice;
+  // 未登録（latestPrice=null）・未算出（yoyRate=null）は 0 として扱う。
+  // 未登録時は 3ライン算出へ進めない（rateReady=false）が、防御的に 0 フォールバックする。
+  const market = rate.latestPrice ?? 0;
   const current = rate.currentPrice > 0 ? rate.currentPrice : market;
-  const yoy = rate.yoyRate;
+  const yoy = rate.yoyRate ?? 0;
 
   const prices = pastPrices(pastCases);
   const pastMin = prices.length > 0 ? Math.min(...prices) : market;

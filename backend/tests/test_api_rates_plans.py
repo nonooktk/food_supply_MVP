@@ -4,14 +4,73 @@ from __future__ import annotations
 
 
 def test_get_rate(api) -> None:
-    """相場: 最新585 / 現行609 / 前年比0.064（3.20%→...→6.40%）/ 正規化12件。"""
+    """相場: 登録済み / 最新585 / 現行609 / 前年比0.064 / 正規化12件 / 対象年月・入力方法あり。"""
     res = api.client.get("/api/cases/No.123456-a/rate", headers=api.headers())
     assert res.status_code == 200
     body = res.json()
+    assert body["registered"] is True
     assert body["latestPrice"] == 585
     assert body["currentPrice"] == 609
     assert abs(body["yoyRate"] - 0.064) < 1e-9
     assert body["normalizedCount"] == 12
+    # issue #7: 対象年月・出典・入力方法・更新日を返す。
+    assert body["yearMonth"]  # 'YYYY-MM'
+    assert body["inputMethod"] == "CSV"
+    assert body["updatedAt"]
+
+
+def test_get_rate_unregistered(api) -> None:
+    """相場未登録の案件では registered=False・latestPrice/yoyRate=None を返す（価格0にしない。issue #3）。
+
+    相場（market_rates）を持たないスペックに案件を1件挿入し、相場未登録の表示契約を検証する。
+    """
+    from app.db import models as m
+
+    session = api.new_session()
+    try:
+        rated_specs = {r.spec_id for r in session.query(m.MarketRate).all()}
+        rateless_spec = next(
+            (s for s in session.query(m.ProductSpec).all() if s.spec_id not in rated_specs), None
+        )
+        assert rateless_spec is not None, "相場のないスペックが seed に存在すること"
+        supplier = session.query(m.Supplier).first()
+        assert supplier is not None
+        session.add(
+            m.NegotiationCase(
+                tenant_id=api.tenant_id,
+                case_no="No.NORATE-1",
+                supplier_id=supplier.supplier_id,
+                spec_id=rateless_spec.spec_id,
+                status="交渉中",
+                current_price=500,
+            )
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    res = api.client.get("/api/cases/No.NORATE-1/rate", headers=api.headers())
+    assert res.status_code == 200
+    body = res.json()
+    assert body["registered"] is False
+    assert body["latestPrice"] is None
+    assert body["yoyRate"] is None
+    assert body["currentPrice"] == 500  # 現行単価は案件由来で保持（未登録でも別項目）
+    assert body["note"]
+
+
+def test_post_manual_rate_clears_yoy(api) -> None:
+    """手入力更新後は前年同月比を「未算出」(None) として返す（据え置きによる不整合を避ける。issue #7 申し送り）。"""
+    # CSV 由来の相場（yoy あり）を持つ案件に、同一スペックの新しい年月を手入力する。
+    body = {"yearMonth": "2026-08", "priceYenKg": 590, "source": "担当者確認"}
+    res = api.client.post("/api/cases/No.123456-a/rate/manual", headers=api.headers(), json=body)
+    assert res.status_code == 200
+    saved = res.json()
+    assert saved["registered"] is True
+    assert saved["latestPrice"] == 590
+    assert saved["inputMethod"] == "手入力"
+    assert saved["yoyRate"] is None  # 手入力は未算出
+    assert saved["yearMonth"] == "2026-08"
 
 
 def test_get_plan(api) -> None:

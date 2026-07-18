@@ -32,7 +32,8 @@ export default function CollectPage() {
     });
   }, [caseNo]);
 
-  const rateReady = !!rate && rate.latestPrice > 0;
+  // 相場が「登録済み」であることを前進条件にする（価格0＝未登録ではなく registered で判定。issue #3）。
+  const rateReady = !!rate && rate.registered;
   const canProceed = rateReady && isPlanReady(plan) && planSaved;
 
   return (
@@ -91,13 +92,41 @@ function RatePanel({
         </div>
       ) : (
         <div className="mt-4 space-y-4">
-          <div>
-            <p className="text-sm text-slate-500">直近相場</p>
-            <p className="num text-2xl font-bold text-slate-900">
-              ¥{rate.latestPrice.toLocaleString("ja-JP")}
-              <span className="ml-1 text-sm font-normal text-slate-500">/kg</span>
-            </p>
-          </div>
+          {rate.registered ? (
+            <div>
+              <p className="text-sm text-slate-500">
+                直近相場
+                {rate.yearMonth && (
+                  <span className="ml-2 text-xs text-slate-400">
+                    （対象 {formatYearMonth(rate.yearMonth)}）
+                  </span>
+                )}
+              </p>
+              <p className="num text-2xl font-bold text-slate-900">
+                ¥{(rate.latestPrice ?? 0).toLocaleString("ja-JP")}
+                <span className="ml-1 text-sm font-normal text-slate-500">/kg</span>
+              </p>
+              <dl className="mt-3 space-y-1 text-xs text-slate-600">
+                <RateMeta label="前年同月比" value={formatYoy(rate.yoyRate)} />
+                {rate.source && <RateMeta label="出典" value={rate.source} />}
+                {rate.inputMethod && <RateMeta label="入力方法" value={rate.inputMethod} />}
+                {rate.updatedAt && <RateMeta label="更新日" value={formatDate(rate.updatedAt)} />}
+              </dl>
+            </div>
+          ) : (
+            // 相場未登録: 価格0として表示せず、未登録であることを明示する（issue #3）。
+            <div>
+              <p className="text-sm text-slate-500">直近相場</p>
+              <p className="mt-1">
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-sm font-medium text-amber-700">
+                  未登録
+                </span>
+              </p>
+              <p className="mt-2 text-sm text-slate-500">
+                相場データがまだ登録されていません。手入力で登録してください。
+              </p>
+            </div>
+          )}
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => setModalOpen(true)}>
               手入力
@@ -129,6 +158,39 @@ function RatePanel({
       )}
     </section>
   );
+}
+
+/** 相場のメタ情報1行（対象年月・出典・入力方法・更新日など） */
+function RateMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-2">
+      <dt className="shrink-0 text-slate-400">{label}</dt>
+      <dd className="text-slate-700">{value}</dd>
+    </div>
+  );
+}
+
+/** 'YYYY-MM' → 'YYYY年M月'（不正値はそのまま返す） */
+function formatYearMonth(ym: string): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym);
+  if (!m) return ym;
+  return `${m[1]}年${Number(m[2])}月`;
+}
+
+/** ISO8601 → 'YYYY/MM/DD'（不正値はそのまま返す） */
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}/${mm}/${dd}`;
+}
+
+/** 前年同月比の表示。未算出（null）は「未算出」を返す（手入力更新後など。issue #7 申し送り対応） */
+function formatYoy(yoy: number | null | undefined): string {
+  if (yoy === null || yoy === undefined) return "未算出";
+  const pct = Math.round(yoy * 1000) / 10;
+  return `${pct > 0 ? "+" : ""}${pct}%`;
 }
 
 interface RateFieldErrors {

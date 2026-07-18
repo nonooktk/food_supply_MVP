@@ -45,9 +45,14 @@ export interface CaseDetail extends CaseSummary {
  *  latestPrice・currentPrice・yoyRate は 3ライン算出式 CALC_RULE_V1
  *  （backend/app/db/seams.py）の入力（market_rate / current_price / yoy_rate）に対応する。 */
 export interface RateInfo {
-  latestPrice: number; // 直近相場 market_rate（円/kg）
+  registered: boolean; // 相場が登録済みか（false=未登録。価格0と区別する。issue #3）
+  latestPrice: number | null; // 直近相場 market_rate（円/kg。未登録時 null）
   currentPrice: number; // 現行仕入単価 current_price（円/kg。撤退ライン算出に使用）
-  yoyRate: number; // 相場前年比 yoy_rate（小数。例: 0.03 = +3%）
+  yoyRate: number | null; // 相場前年比 yoy_rate（小数。例: 0.03 = +3%。未算出時 null）
+  yearMonth?: string | null; // 対象年月 'YYYY-MM'（issue #7）
+  source?: string | null; // 出典（issue #7・登録済み時のみ）
+  inputMethod?: string | null; // 入力方法（手入力/CSV。issue #7 Want）
+  updatedAt?: string | null; // 登録/更新日時（ISO8601。issue #7 Want）
   unit: string; // "円/kg"
   normalizedCount: number; // CSV取込で正規化した件数
   note: string; // 補足（表記ゆれ補正など）
