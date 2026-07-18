@@ -204,6 +204,22 @@ class ResultInput(CamelModel):
     # 所感（今回案件の記録）／申し送り（次回案件への判断材料）を別項目で保持（issue #6）。
     staff_memo: str = ""  # 所感（今回の記録）→ negotiation_results.staff_memo
     handover_note: str = ""  # 次回への申し送り（次回の判断材料）→ handover_note
+    # 【後方互換・移行用／次リリースで削除予定】旧クライアントは note 1項目のみ送る。
+    # note → 効いた場合の解決は resolved_staff_memo / resolved_handover_note で行う（issue #6 レビュー是正）。
+    note: Optional[str] = None  # 旧 API 互換の所感入力（廃止予定）
+
+    @property
+    def resolved_staff_memo(self) -> str:
+        """所感の実効値。新フィールド未指定かつ旧 note があれば note を採用（従来挙動の温存）。
+        新旧同時指定時は新フィールド（staff_memo）を優先する。"""
+        if not self.staff_memo and not self.handover_note and self.note:
+            return self.note
+        return self.staff_memo
+
+    @property
+    def resolved_handover_note(self) -> str:
+        """申し送りの実効値。旧 note は所感へ写すため、申し送りへは反映しない。"""
+        return self.handover_note
 
 
 class ResultRecord(CamelModel):

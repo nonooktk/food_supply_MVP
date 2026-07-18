@@ -163,8 +163,10 @@ def save_result(
     result.achievement = achievement
     result.result_tags = list(body.reason_codes)
     result.accepted_reasons = list(body.reason_codes)
-    result.staff_memo = body.staff_memo  # 所感 → staff_memo
-    result.handover_note = body.handover_note  # 申し送り → handover_note（issue #6）
+    # 所感 → staff_memo／申し送り → handover_note（issue #6）。
+    # resolved_* は旧クライアントの note 単一入力を所感へフォールバックする後方互換込み（移行期のみ）。
+    result.staff_memo = body.resolved_staff_memo
+    result.handover_note = body.resolved_handover_note
     result.data_origin = "アプリ登録"
 
     # 案件ステータスを完了へ（BR-10: 以後この決着は同一スペックの新案件の過去経緯に現れる）。

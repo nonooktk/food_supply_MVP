@@ -102,6 +102,75 @@ def test_handover_note_defaults_empty(api) -> None:
     assert saved["handoverNote"] == ""
 
 
+def test_legacy_note_falls_back_to_staff_memo(api) -> None:
+    """後方互換（issue #6 レビュー是正）: 旧クライアントの note 単一入力は staff_memo に写す。
+
+    新フィールド未指定かつ旧 note のみのペイロードでも所感が失われず保存・復元される。
+    """
+    payload = {
+        "settledPrice": 600,
+        "deliveryTiming": "",
+        "paymentTerms": "",
+        "reasonCodes": ["RC-01"],
+        "note": "旧クライアントの所感",  # 旧 API 形式（staffMemo/handoverNote なし）
+    }
+    saved = api.client.post(
+        "/api/cases/No.123456-a/result", headers=api.headers(), json=payload
+    ).json()
+    assert saved["staffMemo"] == "旧クライアントの所感"  # note → staff_memo に温存
+    assert saved["handoverNote"] == ""
+
+    # DB とも一致（無言の消失が起きていないこと）。
+    with api.new_session() as s:
+        row = [r for r in s.query(m.NegotiationResult).all() if r.case_no == "No.123456-a"][0]
+        assert row.staff_memo == "旧クライアントの所感"
+        assert row.handover_note == ""
+
+
+def test_new_fields_take_priority_over_legacy_note(api) -> None:
+    """後方互換（issue #6 レビュー是正）: note と新フィールド同時指定時は新フィールドを優先。"""
+    payload = {
+        "settledPrice": 600,
+        "deliveryTiming": "",
+        "paymentTerms": "",
+        "reasonCodes": ["RC-01"],
+        "staffMemo": "新所感",
+        "handoverNote": "新申し送り",
+        "note": "旧note（無視されるべき）",
+    }
+    saved = api.client.post(
+        "/api/cases/No.123456-a/result", headers=api.headers(), json=payload
+    ).json()
+    assert saved["staffMemo"] == "新所感"  # 旧 note ではなく新フィールドを採用
+    assert saved["handoverNote"] == "新申し送り"
+
+
+def test_get_restores_legacy_row_with_only_staff_memo(api) -> None:
+    """旧スキーマ時代の行（staff_memo のみ値・handover_note は NULL）でも GET が正しく復元する。
+
+    分離前に保存された既存データの後方互換（issue #6 レビュー是正・推奨2）。
+    handover_note が NULL でも例外なく handoverNote="" を返す。
+    """
+    # 旧行を DB に直接投入（handover_note は未設定＝NULL）。
+    with api.new_session() as s:
+        s.add(
+            m.NegotiationResult(
+                tenant_id=api.tenant_id,
+                case_no="No.123456-a",
+                final_price=600,
+                accepted_reasons=["RC-01"],
+                staff_memo="分離前に保存された所感",
+                handover_note=None,
+            )
+        )
+        s.commit()
+
+    got = api.client.get("/api/cases/No.123456-a/result", headers=api.headers()).json()
+    assert got is not None
+    assert got["staffMemo"] == "分離前に保存された所感"
+    assert got["handoverNote"] == ""  # NULL → 空文字で安全に復元
+
+
 def test_reason_code_validation(api) -> None:
     """RC マスタにない理由コードは 422。"""
     res = api.client.post(
