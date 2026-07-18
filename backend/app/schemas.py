@@ -81,9 +81,16 @@ class CaseStatusUpdate(CamelModel):
 
 # ---- 相場 --------------------------------------------------------------------
 class RateInfo(CamelModel):
-    latest_price: float
+    # registered=False は「相場未登録」。価格0（実データ）と区別するため、
+    # latest_price / yoy_rate 等は未登録・未算出時に None を返す（issue #3）。
+    registered: bool = False  # 相場が登録済みか（未登録なら latest_price は None）
+    latest_price: float | None = None  # 直近相場（未登録時 None）
     current_price: float
-    yoy_rate: float  # 小数（例: 0.032 = +3.2%）
+    yoy_rate: float | None = None  # 前年同月比（小数。例 0.032。手入力等で未算出なら None）
+    year_month: str | None = None  # 対象年月 'YYYY-MM'（issue #7）
+    source: str | None = None  # 出典（issue #7・登録済み時のみ）
+    input_method: str | None = None  # 入力方法（手入力/CSV。issue #7 Want）
+    updated_at: str | None = None  # 登録/更新日時（ISO8601。issue #7 Want）
     unit: str = "円/kg"
     normalized_count: int = 0
     note: str = ""
