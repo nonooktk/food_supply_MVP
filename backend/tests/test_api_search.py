@@ -83,7 +83,8 @@ def test_past_cases_empty_for_new_case(api) -> None:
     created = api.client.post(
         "/api/cases",
         headers=api.headers(),
-        json={"company": "初取引社", "product": "冷凍ホタテ", "quotedPrice": 1200, "targetPeriod": "2026Q4"},
+        # seed 案件がない登録済み取引先を選び、同一取引先の補完結果を発生させない。
+        json={"supplierId": 2, "product": "冷凍ホタテ", "quotedPrice": 1200, "targetPeriod": "2026Q4"},
     ).json()
     res = api.client.get(f"/api/cases/{created['caseNo']}/past-cases", headers=api.headers())
     assert res.status_code == 200

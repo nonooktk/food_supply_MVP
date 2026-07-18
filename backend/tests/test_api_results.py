@@ -95,7 +95,7 @@ def test_br10_write_read_loop(api) -> None:
     case_a = api.client.post(
         "/api/cases",
         headers=api.headers(),
-        json={"company": "新星ミート", "product": "国産豚ロース", "quotedPrice": 900, "targetPeriod": "2026Q3"},
+        json={"supplierId": 1, "product": "国産豚ロース", "quotedPrice": 900, "targetPeriod": "2026Q3"},
     ).json()["caseNo"]
     # ⑤ 案件Aに結果を記録（決着 880）
     api.client.post(
@@ -107,7 +107,7 @@ def test_br10_write_read_loop(api) -> None:
     case_b = api.client.post(
         "/api/cases",
         headers=api.headers(),
-        json={"company": "新星ミート", "product": "国産豚ロース", "quotedPrice": 910, "targetPeriod": "2026Q4"},
+        json={"supplierId": 1, "product": "国産豚ロース", "quotedPrice": 910, "targetPeriod": "2026Q4"},
     ).json()["caseNo"]
     # ② 案件Bの過去経緯に A の決着が現れる（DB 由来経路・即時反映）
     past = api.client.get(f"/api/cases/{case_b}/past-cases", headers=api.headers()).json()
