@@ -10,7 +10,7 @@ import { ThreeLineCard } from "@/components/ui/ThreeLineCard";
 import { Spinner } from "@/components/ui/Spinner";
 import { api } from "@/lib/api";
 import { toManYen } from "@/lib/calc";
-import type { LineType, ThreeLine, ThreeLineResult } from "@/lib/types";
+import type { LineType, RateInfo, ThreeLine, ThreeLineResult } from "@/lib/types";
 
 export default function LinesPage() {
   const params = useParams<{ caseNo: string }>();
@@ -18,13 +18,17 @@ export default function LinesPage() {
   const caseNo = decodeURIComponent(params.caseNo);
 
   const [result, setResult] = useState<ThreeLineResult | null>(null);
+  const [rate, setRate] = useState<RateInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
     setLoading(true);
-    api
-      .getThreeLines(caseNo)
-      .then(setResult)
+    // 撤退ラインの注記判定のため、相場情報（yoyRate）も併せて取得する（issue #7 申し送り対応・表示のみ）。
+    Promise.all([api.getThreeLines(caseNo), api.getRateInfo(caseNo)])
+      .then(([lines, rateInfo]) => {
+        setResult(lines);
+        setRate(rateInfo);
+      })
       .finally(() => setLoading(false));
   }, [caseNo]);
 
@@ -98,6 +102,14 @@ export default function LinesPage() {
           />
         ))}
       </div>
+
+      {/* 前年同月データが未算出のときの撤退ライン挙動を軽く周知する注記（issue #7 申し送り対応・表示のみ）。
+          相場登録済み かつ yoyRate が null のときだけ表示する。未登録時・算出済み時は出さない。 */}
+      {rate?.registered && rate.yoyRate === null && (
+        <p className="text-xs text-slate-500">
+          ※ 前年同月データなし（未算出）のため、撤退ラインは現行＋2ptで算出しています。
+        </p>
+      )}
 
       {/* 年間影響額試算（§3.3 AnnualImpactSummary） */}
       <section className="rounded-lg border border-slate-200 bg-white p-5">
