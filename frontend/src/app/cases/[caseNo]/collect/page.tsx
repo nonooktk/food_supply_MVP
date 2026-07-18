@@ -8,6 +8,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { CitationBadge } from "@/components/ui/CitationBadge";
 import { TextField } from "@/components/ui/Form";
+import { Modal } from "@/components/ui/Modal";
 import { SkeletonCard } from "@/components/ui/states";
 import { api } from "@/lib/api";
 import { isPlanReady } from "@/lib/calc";
@@ -39,7 +40,7 @@ export default function CollectPage() {
       <h1 className="text-2xl font-bold text-slate-900">情報収集</h1>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <RatePanel rate={rate} />
+        <RatePanel caseNo={caseNo} rate={rate} onSaved={setRate} />
         <PastCasePanel caseNo={caseNo} />
         <PlanPanel
           caseNo={caseNo}
@@ -70,7 +71,17 @@ export default function CollectPage() {
 }
 
 /** 相場情報パネル（§3.2） */
-function RatePanel({ rate }: { rate: RateInfo | null }) {
+function RatePanel({
+  caseNo,
+  rate,
+  onSaved,
+}: {
+  caseNo: string;
+  rate: RateInfo | null;
+  onSaved: (rate: RateInfo) => void;
+}) {
+  const [modalOpen, setModalOpen] = useState(false);
+
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5">
       <h2 className="text-lg font-semibold text-slate-900">相場情報</h2>
@@ -88,11 +99,16 @@ function RatePanel({ rate }: { rate: RateInfo | null }) {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm">
+            <Button variant="secondary" size="sm" onClick={() => setModalOpen(true)}>
               手入力
             </Button>
-            <Button variant="secondary" size="sm">
-              CSV取込 ⬆
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled
+              title="将来機能（現在は利用できません）"
+            >
+              CSV取込 ⬆（将来機能）
             </Button>
           </div>
           <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -100,9 +116,117 @@ function RatePanel({ rate }: { rate: RateInfo | null }) {
             <br />
             {rate.note}
           </p>
+          <ManualRateModal
+            open={modalOpen}
+            caseNo={caseNo}
+            onClose={() => setModalOpen(false)}
+            onSaved={(updated) => {
+              onSaved(updated);
+              setModalOpen(false);
+            }}
+          />
         </div>
       )}
     </section>
+  );
+}
+
+interface RateFieldErrors {
+  yearMonth?: string;
+  priceYenKg?: string;
+}
+
+function ManualRateModal({
+  open,
+  caseNo,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  caseNo: string;
+  onClose: () => void;
+  onSaved: (rate: RateInfo) => void;
+}) {
+  const [yearMonth, setYearMonth] = useState("");
+  const [priceYenKg, setPriceYenKg] = useState("");
+  const [source, setSource] = useState("");
+  const [errors, setErrors] = useState<RateFieldErrors>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  function validate(): RateFieldErrors {
+    const next: RateFieldErrors = {};
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) {
+      next.yearMonth = "対象年月を YYYY-MM 形式で入力してください。";
+    }
+    const price = Number(priceYenKg);
+    if (priceYenKg.trim() === "" || Number.isNaN(price) || price <= 0) {
+      next.priceYenKg = "相場価格（円/kg）を正の数で入力してください。";
+    }
+    return next;
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const next = validate();
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
+
+    setSubmitting(true);
+    try {
+      const updated = await api.saveManualRate(caseNo, {
+        yearMonth,
+        priceYenKg: Number(priceYenKg),
+        source: source.trim() || undefined,
+      });
+      setYearMonth("");
+      setPriceYenKg("");
+      setSource("");
+      setErrors({});
+      onSaved(updated);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="相場情報を手入力">
+      <form onSubmit={submit} className="space-y-4" noValidate>
+        <TextField
+          label="対象年月"
+          required
+          type="month"
+          value={yearMonth}
+          onChange={(e) => setYearMonth(e.target.value)}
+          error={errors.yearMonth}
+        />
+        <TextField
+          label="相場価格（円/kg）"
+          required
+          numeric
+          type="number"
+          min="0"
+          step="any"
+          value={priceYenKg}
+          onChange={(e) => setPriceYenKg(e.target.value)}
+          error={errors.priceYenKg}
+          placeholder="例: 600"
+        />
+        <TextField
+          label="出典"
+          value={source}
+          onChange={(e) => setSource(e.target.value)}
+          placeholder="例: 担当者確認"
+        />
+        <div className="flex justify-end gap-2 pt-2">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={submitting}>
+            キャンセル
+          </Button>
+          <Button type="submit" loading={submitting}>
+            保存
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

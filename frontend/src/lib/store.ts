@@ -8,11 +8,14 @@ import {
   MOCK_CASES,
   MOCK_CASE_DETAILS,
   MOCK_PLANS,
+  MOCK_RATES,
 } from "@/lib/mock/data";
 import type {
   CaseStatus,
   CaseSummary,
   CompanyPlan,
+  RateManualInput,
+  RateInfo,
   ResultRecord,
   StrategyDraft,
   ThreeLine,
@@ -26,6 +29,7 @@ interface StoreShape {
   cases: CaseSummary[];
   caseExtra: Record<string, { quotedPrice: number; targetPeriod: string }>;
   plans: Record<string, CompanyPlan>;
+  manualRates: Record<string, Record<string, RateManualInput>>;
   lines: Record<string, ThreeLine[]>; // 手修正を含む確定ライン
   strategies: Record<string, StrategyDraft>; // ④作戦シートの保存済み下書き
   results: Record<string, ResultRecord>; // ⑤結果記録
@@ -41,6 +45,7 @@ function seed(): StoreShape {
     cases: [...MOCK_CASES],
     caseExtra,
     plans: { ...MOCK_PLANS },
+    manualRates: {},
     lines: {},
     strategies: {},
     results: {},
@@ -81,6 +86,27 @@ export function setPlan(caseNo: string, plan: CompanyPlan): void {
   const s = loadStore();
   s.plans[caseNo] = plan;
   saveStore(s);
+}
+
+export function saveManualRate(caseNo: string, input: RateManualInput): RateInfo {
+  const s = loadStore();
+  s.manualRates = s.manualRates ?? {};
+  s.manualRates[caseNo] = { ...(s.manualRates[caseNo] ?? {}), [input.yearMonth]: input };
+  saveStore(s);
+
+  const base = MOCK_RATES[caseNo];
+  const latestManual = Object.values(s.manualRates[caseNo]).sort((a, b) =>
+    a.yearMonth.localeCompare(b.yearMonth),
+  ).at(-1);
+  const manualCount = Object.keys(s.manualRates[caseNo]).length;
+  return {
+    latestPrice: latestManual?.priceYenKg ?? base?.latestPrice ?? 0,
+    currentPrice: base?.currentPrice ?? 0,
+    yoyRate: base?.yoyRate ?? 0,
+    unit: "円/kg",
+    normalizedCount: (base?.normalizedCount ?? 0) + manualCount,
+    note: "手入力の相場情報を保存しました。",
+  };
 }
 
 export function getLines(caseNo: string): ThreeLine[] | null {
