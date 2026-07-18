@@ -23,7 +23,8 @@ def test_save_result_computes_and_completes(api) -> None:
         "deliveryTiming": "2026/07〜09 月2回",
         "paymentTerms": "月末締め翌月末払い",
         "reasonCodes": ["RC-03", "RC-04"],
-        "note": "数量コミットで着地付近に収めた。",
+        "staffMemo": "数量コミットで着地付近に収めた。",
+        "handoverNote": "次回は数量カードを早めに切る。",
     }
     res = api.client.post("/api/cases/No.123456-a/result", headers=api.headers(), json=payload)
     assert res.status_code == 201
@@ -50,11 +51,145 @@ def test_get_result_roundtrip(api) -> None:
     api.client.post(
         "/api/cases/No.123456-a/result",
         headers=api.headers(),
-        json={"settledPrice": 600, "deliveryTiming": "T", "paymentTerms": "P", "reasonCodes": ["RC-01"], "note": "n"},
+        json={"settledPrice": 600, "deliveryTiming": "T", "paymentTerms": "P", "reasonCodes": ["RC-01"], "staffMemo": "n"},
     )
     got = api.client.get("/api/cases/No.123456-a/result", headers=api.headers()).json()
     assert got is not None
-    assert got["settledPrice"] == 600 and got["note"] == "n"
+    assert got["settledPrice"] == 600 and got["staffMemo"] == "n"
+
+
+def test_memo_handover_separated(api) -> None:
+    """所感→staff_memo、申し送り→handover_note に別々に保存され、再取得で別々に復元される（issue #6）。"""
+    payload = {
+        "settledPrice": 600,
+        "deliveryTiming": "",
+        "paymentTerms": "",
+        "reasonCodes": ["RC-01"],
+        "staffMemo": "今回の所感メモ",
+        "handoverNote": "次回への申し送りメモ",
+    }
+    saved = api.client.post(
+        "/api/cases/No.123456-a/result", headers=api.headers(), json=payload
+    ).json()
+    assert saved["staffMemo"] == "今回の所感メモ"
+    assert saved["handoverNote"] == "次回への申し送りメモ"
+
+    # 再取得（GET）でも両者が別々に復元される。
+    got = api.client.get("/api/cases/No.123456-a/result", headers=api.headers()).json()
+    assert got["staffMemo"] == "今回の所感メモ"
+    assert got["handoverNote"] == "次回への申し送りメモ"
+
+    # DB カラムにも別々に永続化されている。
+    with api.new_session() as s:
+        row = [r for r in s.query(m.NegotiationResult).all() if r.case_no == "No.123456-a"][0]
+        assert row.staff_memo == "今回の所感メモ"
+        assert row.handover_note == "次回への申し送りメモ"
+
+
+def test_handover_note_defaults_empty(api) -> None:
+    """申し送り未入力（省略）でも保存でき、空文字で復元される（後方互換）。"""
+    payload = {
+        "settledPrice": 600,
+        "deliveryTiming": "",
+        "paymentTerms": "",
+        "reasonCodes": ["RC-01"],
+        "staffMemo": "所感のみ",
+    }
+    saved = api.client.post(
+        "/api/cases/No.123456-a/result", headers=api.headers(), json=payload
+    ).json()
+    assert saved["staffMemo"] == "所感のみ"
+    assert saved["handoverNote"] == ""
+
+
+def test_legacy_note_falls_back_to_staff_memo(api) -> None:
+    """後方互換（issue #6 レビュー是正）: 旧クライアントの note 単一入力は staff_memo に写す。
+
+    新フィールド未指定かつ旧 note のみのペイロードでも所感が失われず保存・復元される。
+    """
+    payload = {
+        "settledPrice": 600,
+        "deliveryTiming": "",
+        "paymentTerms": "",
+        "reasonCodes": ["RC-01"],
+        "note": "旧クライアントの所感",  # 旧 API 形式（staffMemo/handoverNote なし）
+    }
+    saved = api.client.post(
+        "/api/cases/No.123456-a/result", headers=api.headers(), json=payload
+    ).json()
+    assert saved["staffMemo"] == "旧クライアントの所感"  # note → staff_memo に温存
+    assert saved["handoverNote"] == ""
+
+    # DB とも一致（無言の消失が起きていないこと）。
+    with api.new_session() as s:
+        row = [r for r in s.query(m.NegotiationResult).all() if r.case_no == "No.123456-a"][0]
+        assert row.staff_memo == "旧クライアントの所感"
+        assert row.handover_note == ""
+
+
+def test_new_fields_take_priority_over_legacy_note(api) -> None:
+    """後方互換（issue #6 レビュー是正）: note と新フィールド同時指定時は新フィールドを優先。"""
+    payload = {
+        "settledPrice": 600,
+        "deliveryTiming": "",
+        "paymentTerms": "",
+        "reasonCodes": ["RC-01"],
+        "staffMemo": "新所感",
+        "handoverNote": "新申し送り",
+        "note": "旧note（無視されるべき）",
+    }
+    saved = api.client.post(
+        "/api/cases/No.123456-a/result", headers=api.headers(), json=payload
+    ).json()
+    assert saved["staffMemo"] == "新所感"  # 旧 note ではなく新フィールドを採用
+    assert saved["handoverNote"] == "新申し送り"
+
+
+def test_explicit_empty_staff_memo_does_not_fall_back_to_note(api) -> None:
+    """後方互換（issue #6 レビュー是正・細部）: 明示的な空文字 staffMemo は note にフォールバックしない。
+
+    未送信（None）と明示的空文字（""）を区別し、{staffMemo: "", note: "x"} では
+    所感を "" として尊重する（クリア指示を旧 note で上書きしない）。
+    """
+    payload = {
+        "settledPrice": 600,
+        "deliveryTiming": "",
+        "paymentTerms": "",
+        "reasonCodes": ["RC-01"],
+        "staffMemo": "",  # 明示的な空（クリア指示）
+        "note": "旧note（フォールバックされてはならない）",
+    }
+    saved = api.client.post(
+        "/api/cases/No.123456-a/result", headers=api.headers(), json=payload
+    ).json()
+    assert saved["staffMemo"] == ""  # note にフォールバックしない
+    assert saved["handoverNote"] == ""
+
+
+def test_get_restores_legacy_row_with_only_staff_memo(api) -> None:
+    """旧スキーマ時代の行（staff_memo のみ値・handover_note は NULL）でも GET が正しく復元する。
+
+    分離前に保存された既存データの後方互換（issue #6 レビュー是正・推奨2）。
+    handover_note が NULL でも例外なく handoverNote="" を返す。
+    """
+    # 旧行を DB に直接投入（handover_note は未設定＝NULL）。
+    with api.new_session() as s:
+        s.add(
+            m.NegotiationResult(
+                tenant_id=api.tenant_id,
+                case_no="No.123456-a",
+                final_price=600,
+                accepted_reasons=["RC-01"],
+                staff_memo="分離前に保存された所感",
+                handover_note=None,
+            )
+        )
+        s.commit()
+
+    got = api.client.get("/api/cases/No.123456-a/result", headers=api.headers()).json()
+    assert got is not None
+    assert got["staffMemo"] == "分離前に保存された所感"
+    assert got["handoverNote"] == ""  # NULL → 空文字で安全に復元
 
 
 def test_reason_code_validation(api) -> None:
@@ -62,7 +197,7 @@ def test_reason_code_validation(api) -> None:
     res = api.client.post(
         "/api/cases/No.123456-a/result",
         headers=api.headers(),
-        json={"settledPrice": 600, "deliveryTiming": "", "paymentTerms": "", "reasonCodes": ["RC-99"], "note": ""},
+        json={"settledPrice": 600, "deliveryTiming": "", "paymentTerms": "", "reasonCodes": ["RC-99"], "staffMemo": ""},
     )
     assert res.status_code == 422
     assert res.headers["content-type"] == "application/problem+json"
@@ -71,7 +206,7 @@ def test_reason_code_validation(api) -> None:
 def test_result_idempotent(api) -> None:
     """同一 Idempotency-Key の再送は二重記録しない。"""
     headers = {**api.headers(), "Idempotency-Key": "res-1"}
-    payload = {"settledPrice": 601, "deliveryTiming": "", "paymentTerms": "", "reasonCodes": ["RC-02"], "note": ""}
+    payload = {"settledPrice": 601, "deliveryTiming": "", "paymentTerms": "", "reasonCodes": ["RC-02"], "staffMemo": ""}
     r1 = api.client.post("/api/cases/No.123456-a/result", headers=headers, json=payload)
     r2 = api.client.post("/api/cases/No.123456-a/result", headers=headers, json=payload)
     assert r1.json() == r2.json()
@@ -84,7 +219,7 @@ def test_result_404(api) -> None:
     res = api.client.post(
         "/api/cases/No.NOPE/result",
         headers=api.headers(),
-        json={"settledPrice": 1, "deliveryTiming": "", "paymentTerms": "", "reasonCodes": [], "note": ""},
+        json={"settledPrice": 1, "deliveryTiming": "", "paymentTerms": "", "reasonCodes": [], "staffMemo": ""},
     )
     assert res.status_code == 404
 
@@ -101,7 +236,7 @@ def test_br10_write_read_loop(api) -> None:
     api.client.post(
         f"/api/cases/{case_a}/result",
         headers=api.headers(),
-        json={"settledPrice": 880, "deliveryTiming": "2026/07", "paymentTerms": "月末", "reasonCodes": ["RC-05"], "note": "数量拡大で減額"},
+        json={"settledPrice": 880, "deliveryTiming": "2026/07", "paymentTerms": "月末", "reasonCodes": ["RC-05"], "staffMemo": "数量拡大で減額", "handoverNote": "数量カードは有効"},
     )
     # ① 同一商材で案件Bを作成（A と同じ spec を共有）
     case_b = api.client.post(

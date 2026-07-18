@@ -39,6 +39,9 @@ def _result_snippet(result: m.NegotiationResult) -> str:
         bits.append(result.staff_memo)
     elif result.result_tags:
         bits.append("・".join(result.result_tags))
+    # 次回への申し送り（次回案件の判断材料）を明示ラベル付きで提示（issue #6 Want）。
+    if result.handover_note:
+        bits.append(f"申し送り: {result.handover_note}")
     return "。".join(bits) if bits else "過去の決着記録。"
 
 

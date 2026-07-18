@@ -183,7 +183,8 @@ export interface ResultInput {
   deliveryTiming: string; // 納入時期
   paymentTerms: string; // 支払条件
   reasonCodes: string[]; // 決着理由タグ（複数選択・必須）
-  note: string; // 所感・申し送り
+  staffMemo: string; // 所感（今回案件の記録）
+  handoverNote: string; // 次回への申し送り（次回案件への判断材料）
 }
 
 /** 自動計算値（§3.5 AutoCalcField） */

@@ -241,7 +241,10 @@ class MockApi implements Api {
                 product: r.product,
                 snippet: `決着 ¥${r.settledPrice.toLocaleString("ja-JP")}/kg（見積比 ${
                   r.quoteDiffPct >= 0 ? "+" : ""
-                }${r.quoteDiffPct}%）。${r.note ? r.note : "所感の記録なし。"}`,
+                }${r.quoteDiffPct}%）。${r.staffMemo ? r.staffMemo : "所感の記録なし。"}${
+                  // 次回への申し送り（次回案件の判断材料）を明示ラベル付きで提示（issue #6 Want）。
+                  r.handoverNote ? `。申し送り: ${r.handoverNote}` : ""
+                }`,
               },
             ],
           };

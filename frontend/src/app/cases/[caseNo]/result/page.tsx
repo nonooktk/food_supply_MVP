@@ -38,7 +38,8 @@ export default function ResultPage() {
   const [deliveryTiming, setDeliveryTiming] = useState("");
   const [paymentTerms, setPaymentTerms] = useState("");
   const [reasonCodes, setReasonCodes] = useState<string[]>([]);
-  const [note, setNote] = useState("");
+  const [staffMemo, setStaffMemo] = useState(""); // 所感（今回案件の記録）
+  const [handoverNote, setHandoverNote] = useState(""); // 次回への申し送り（次回案件への判断材料）
   const [errors, setErrors] = useState<{ settled?: string; reason?: string }>({});
 
   const [saving, setSaving] = useState(false);
@@ -70,7 +71,8 @@ export default function ResultPage() {
         setDeliveryTiming(existing.deliveryTiming);
         setPaymentTerms(existing.paymentTerms);
         setReasonCodes(existing.reasonCodes);
-        setNote(existing.note);
+        setStaffMemo(existing.staffMemo);
+        setHandoverNote(existing.handoverNote);
       }
       setLoading(false);
     })();
@@ -107,7 +109,8 @@ export default function ResultPage() {
         deliveryTiming: deliveryTiming.trim(),
         paymentTerms: paymentTerms.trim(),
         reasonCodes,
-        note: note.trim(),
+        staffMemo: staffMemo.trim(),
+        handoverNote: handoverNote.trim(),
       });
       setCompleted(record);
     } catch {
@@ -115,7 +118,7 @@ export default function ResultPage() {
     } finally {
       setSaving(false);
     }
-  }, [caseNo, hasSettled, settledNum, deliveryTiming, paymentTerms, reasonCodes, note]);
+  }, [caseNo, hasSettled, settledNum, deliveryTiming, paymentTerms, reasonCodes, staffMemo, handoverNote]);
 
   if (loading) {
     return (
@@ -239,17 +242,36 @@ export default function ResultPage() {
         </div>
       </section>
 
-      {/* 所感・申し送り */}
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <h2 className="text-lg font-semibold text-slate-900">所感・申し送り</h2>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={3}
-          className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
-          placeholder="次回への申し送り事項（任意）"
-        />
+      {/* 所感・申し送り（別項目。所感=今回案件の記録／申し送り=次回案件への判断材料） */}
+      <section className="rounded-lg border border-slate-200 bg-white p-5 space-y-5">
+        {/* 所感（今回案件の記録） */}
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">所感</h2>
+          <p className="mt-1 text-sm text-slate-500">今回案件の記録（交渉の振り返り）。</p>
+          <textarea
+            value={staffMemo}
+            onChange={(e) => setStaffMemo(e.target.value)}
+            rows={3}
+            className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+            placeholder="例: 数量コミットで着地付近に収めた（任意）"
+          />
+        </div>
+        {/* 次回への申し送り（次回案件への判断材料） */}
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">次回への申し送り</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            次回案件への判断材料。次に同一商材×取引先で案件を作成したとき、②情報収集「過去経緯」に表示されます。
+          </p>
+          <textarea
+            value={handoverNote}
+            onChange={(e) => setHandoverNote(e.target.value)}
+            rows={3}
+            className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+            placeholder="例: 次回は数量カードを早めに切る（任意）"
+          />
+        </div>
       </section>
 
       <div className="flex justify-end">

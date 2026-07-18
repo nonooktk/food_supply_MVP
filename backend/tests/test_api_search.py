@@ -39,6 +39,19 @@ def test_past_cases_from_db(api) -> None:
     assert all(it["citations"] for it in body["items"])
 
 
+def test_past_cases_snippet_includes_handover_note(api) -> None:
+    """次回への申し送り（handover_note）が過去経緯の引用スニペットに「申し送り: …」で現れる（issue #6 Want）。"""
+    res = api.client.get("/api/cases/No.123456-a/past-cases", headers=api.headers())
+    assert res.status_code == 200
+    snippets = [
+        c["snippet"] for it in res.json()["items"] for c in it["citations"]
+    ]
+    # seed の No.123452-a は staff_memo・handover_note 双方を持つ。
+    assert any("申し送り: 数量カードは丸紅に有効" in s for s in snippets)
+    # 全件で「申し送り:」ラベルが付く（seed の spec1 完了4件は全て handover_note あり）。
+    assert all("申し送り:" in s for s in snippets)
+
+
 def test_kre_engine_is_called(api) -> None:
     """KRE エンジンが DI で呼ばれ、テナント/スペックが渡ること（契約経由）。"""
     spy = _SpyEngine()

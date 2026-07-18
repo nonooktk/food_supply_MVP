@@ -201,7 +201,28 @@ class ResultInput(CamelModel):
     delivery_timing: str = ""
     payment_terms: str = ""
     reason_codes: list[str] = Field(default_factory=list)  # 決着理由タグ（RC-xx・複数選択）
-    note: str = ""
+    # 所感（今回案件の記録）／申し送り（次回案件への判断材料）を別項目で保持（issue #6）。
+    # 既定は None（＝未送信）。明示的な空文字（""）＝クリア指示と区別するため str ではなく Optional
+    # とする（issue #6 レビュー是正: 未送信と空文字の混同でフォールバック優先が崩れるのを防ぐ）。
+    staff_memo: Optional[str] = None  # 所感（今回の記録）→ negotiation_results.staff_memo
+    handover_note: Optional[str] = None  # 次回への申し送り（次回の判断材料）→ handover_note
+    # 【後方互換・移行用／次リリースで削除予定】旧クライアントは note 1項目のみ送る。
+    # note → 効いた場合の解決は resolved_staff_memo / resolved_handover_note で行う（issue #6 レビュー是正）。
+    note: Optional[str] = None  # 旧 API 互換の所感入力（廃止予定）
+
+    @property
+    def resolved_staff_memo(self) -> str:
+        """所感の実効値。新フィールド未送信（None）かつ旧 note がある場合のみ note を採用（従来挙動の温存）。
+        明示的な空文字（""）はクリア指示として尊重し note へフォールバックしない。
+        新旧同時指定時は新フィールド（staff_memo）を優先する。"""
+        if self.staff_memo is None and self.note is not None:
+            return self.note
+        return self.staff_memo or ""
+
+    @property
+    def resolved_handover_note(self) -> str:
+        """申し送りの実効値。旧 note は所感へ写すため申し送りへは反映しない。None は空文字に正規化。"""
+        return self.handover_note or ""
 
 
 class ResultRecord(CamelModel):
@@ -211,7 +232,8 @@ class ResultRecord(CamelModel):
     delivery_timing: str
     payment_terms: str
     reason_codes: list[str]
-    note: str
+    staff_memo: str  # 所感（今回案件の記録）
+    handover_note: str  # 次回への申し送り（次回案件への判断材料）
     quote_diff_pct: float  # 見積比（%。マイナスは見積より安く決着）
     achievement_pct: float  # 目標達成度（%）
     case_no: str

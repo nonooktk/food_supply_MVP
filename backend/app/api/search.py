@@ -33,6 +33,9 @@ def _build_citation(case: m.NegotiationCase, result: m.NegotiationResult, compan
         bits.append(result.staff_memo)
     elif result.result_tags:
         bits.append("・".join(result.result_tags))
+    # 次回への申し送り（次回案件の判断材料）を明示ラベル付きで提示（issue #6 Want）。
+    if result.handover_note:
+        bits.append(f"申し送り: {result.handover_note}")
     snippet = "。".join(bits) if bits else "過去の決着記録。"
     return Citation(case_no=case.case_no, company=company, product=product, snippet=snippet)
 

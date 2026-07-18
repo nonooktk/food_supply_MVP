@@ -71,6 +71,15 @@ def test_generate_strategy(api, fake_ai) -> None:
     assert cites[0]["company"] == "丸紅畜産"
 
 
+def test_strategy_citation_includes_handover_note(api, fake_ai) -> None:
+    """作戦シートの引用スニペットにも次回への申し送りが「申し送り: …」で現れる（issue #6 Want）。"""
+    res = api.client.post("/api/cases/No.123456-a/strategy/generate", headers=api.headers())
+    assert res.status_code == 200
+    # 1件目は No.123455-a を引用。seed の同案件は handover_note「次回は前倒しで数量提示を」を持つ。
+    snippet = res.json()["points"][0]["citations"][0]["snippet"]
+    assert "申し送り: 次回は前倒しで数量提示を" in snippet
+
+
 def test_generate_then_get(api, fake_ai) -> None:
     """生成後、GET で保存済み下書きが取得できる。"""
     api.client.post("/api/cases/No.123456-a/strategy/generate", headers=api.headers())
