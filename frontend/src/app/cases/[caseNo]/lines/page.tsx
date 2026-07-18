@@ -107,7 +107,7 @@ export default function LinesPage() {
           相場登録済み かつ yoyRate が null のときだけ表示する。未登録時・算出済み時は出さない。 */}
       {rate?.registered && rate.yoyRate === null && (
         <p className="text-xs text-slate-500">
-          ※ 前年同月データなし（未算出）のため、撤退ラインは現行＋2ptで算出しています。
+          ※ 前年同月データなし（未算出）のため、上昇率0%として扱われ、撤退ラインは現行＋2%と許容上限のいずれか低い方で算出しています。
         </p>
       )}
 

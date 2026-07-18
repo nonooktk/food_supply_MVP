@@ -137,7 +137,7 @@ def _build_context(
         quoted_price=float(case.proposed_price or 0),
         current_price=float(case.current_price or 0),
         market_rate=float(latest.price_yen_kg) if latest and latest.price_yen_kg is not None else 0.0,
-        yoy_rate=float(latest.yoy_change) / 100.0 if latest and latest.yoy_change is not None else 0.0,
+        yoy_rate=float(latest.yoy_change) / 100.0 if latest and latest.yoy_change is not None else None,
         target=float(by_type.get("target", 0)),
         landing=float(by_type.get("landing", 0)),
         walkaway=float(by_type.get("walkaway", 0)),

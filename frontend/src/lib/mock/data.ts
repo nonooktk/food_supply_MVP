@@ -79,13 +79,13 @@ export const MOCK_CASE_DETAILS: Record<string, Omit<CaseDetail, keyof CaseSummar
 };
 
 /** 相場情報（案件番号 → 相場）。デザインガイド §3.2 のサンプル ¥620/kg。
- *  currentPrice（現行仕入単価）・yoyRate（相場前年比）は CALC_RULE_V1 の撤退ライン算出に使用。 */
+ *  currentPrice（現行仕入単価）・yoyRate（相場前年同月比）は CALC_RULE_V1 の撤退ライン算出に使用。 */
 export const MOCK_RATES: Record<string, RateInfo> = {
   "No.500001": {
     registered: true,
     latestPrice: 620,
     currentPrice: 610, // 現行の仕入単価
-    yoyRate: 0.03, // 相場前年比 +3%（上昇局面）
+    yoyRate: 0.03, // 相場前年同月比 +3%（上昇局面）
     yearMonth: "2026-07",
     source: "農水省 卸売市場統計",
     inputMethod: "CSV",

@@ -50,7 +50,7 @@ class StrategyContext:
     quoted_price: float
     current_price: float
     market_rate: float
-    yoy_rate: float  # 小数（0.032 = +3.2%）
+    yoy_rate: Optional[float]  # 小数（0.032 = +3.2%）。未算出時 None
     target: float
     landing: float
     walkaway: float
@@ -84,7 +84,11 @@ def build_context_text(ctx: StrategyContext) -> str:
         f"取引先: {ctx.company}",
         f"商材: {ctx.product}",
         f"提示見積: ¥{ctx.quoted_price:.0f}/kg / 現行単価: ¥{ctx.current_price:.0f}/kg",
-        f"直近相場: ¥{ctx.market_rate:.0f}/kg（前年同月比 {ctx.yoy_rate * 100:+.1f}%）",
+        (
+            f"直近相場: ¥{ctx.market_rate:.0f}/kg（前年同月比 {ctx.yoy_rate * 100:+.1f}%）"
+            if ctx.yoy_rate is not None
+            else f"直近相場: ¥{ctx.market_rate:.0f}/kg（前年同月比 未算出）"
+        ),
         "3ライン（本体が算出。AIはこれ以外の価格を作らないこと）:",
         f"  目標 ¥{ctx.target:.0f}/kg ／ 着地 ¥{ctx.landing:.0f}/kg ／ 撤退 ¥{ctx.walkaway:.0f}/kg",
         f"自社計画: 計画単価 ¥{ctx.plan_price:.0f}/kg ／ 月次 {ctx.monthly_volume:.0f}kg ／ "

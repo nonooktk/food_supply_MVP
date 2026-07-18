@@ -4,7 +4,7 @@ from __future__ import annotations
 
 
 def test_get_rate(api) -> None:
-    """相場: 登録済み / 最新585 / 現行609 / 前年比0.064 / 正規化12件 / 対象年月・入力方法あり。"""
+    """相場: 登録済み / 最新585 / 現行609 / 前年同月比0.064 / 正規化12件 / 対象年月・入力方法あり。"""
     res = api.client.get("/api/cases/No.123456-a/rate", headers=api.headers())
     assert res.status_code == 200
     body = res.json()
