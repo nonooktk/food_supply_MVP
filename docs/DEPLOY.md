@@ -213,3 +213,26 @@ az containerapp logs show -g "$RG" -n "$API_APP" --tail 50 | grep -i "entrypoint
   一貫性のため単一レプリカ運用。スケールが必要になったらグラフ供給を共有ストレージ化する）。
 - 結果記録などで DB を更新しても、KRE の AI Search 反映は `build_index` 再実行（手動/バッチ）が必要
   （リアルタイム同期は将来課題）。
+
+## 追記（2026-07-19）: フロントビルドは最小コンテキスト方式で行う
+
+`az acr build` をリポジトリ内 `frontend/` から直接実行すると、コンテキスト梱包時に
+`node_modules`（数十万ファイル）の走査が発生し、**iCloud 同期対象ディレクトリ（Desktop 配下）では
+実体取得と重なって数十分単位で停滞する**（2026-07-19 の v2 デプロイで実発生）。
+
+対策: 除外対象を含まない最小コンテキストをローカル領域へ切り出してからビルドする。
+
+```bash
+CTX=$(mktemp -d)/fr-web-ctx
+mkdir -p "$CTX"
+rsync -a --delete --exclude node_modules --exclude .next --exclude out --exclude build \
+  --exclude dist --exclude ".env" --exclude ".env.local" --exclude .turbo --exclude .git \
+  frontend/ "$CTX/"
+cd "$CTX" && az acr build --registry $ACR --image "freeradicals-web:$TAG" --file Dockerfile \
+  --build-arg NEXT_PUBLIC_API_BASE="https://$API_FQDN/api" \
+  --build-arg NEXT_PUBLIC_GOOGLE_CLIENT_ID="<GOOGLE_CLIENT_ID>" \
+  --build-arg NEXT_PUBLIC_USE_MOCK=false \
+  --build-arg NEXT_PUBLIC_AUTH_MODE=google .
+```
+
+（backend はコンテキストが小さいため従来どおりで可。約684KB・ビルド約1分半で完了する。）
