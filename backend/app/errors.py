@@ -8,6 +8,7 @@ PoC（api/analyses.py）の RFC7807・冪等キーのパターンを本プロジ
 
 from __future__ import annotations
 
+import math
 import threading
 import time
 from typing import Any, Optional
@@ -43,6 +44,23 @@ class ApiProblem(Exception):
         self.extra = extra or {}
 
 
+def _json_safe(value: Any) -> Any:
+    """非有限 float（inf / -inf / nan）を文字列化して JSON 安全にする。
+
+    starlette の JSONResponse は ``json.dumps(..., allow_nan=False)`` を使うため、
+    検証エラー詳細（``exc.errors()`` の ``input`` / ``ctx`` 等）に非有限 float が
+    含まれると ``ValueError`` で 500 に化ける。dict / list を再帰的に走査し、
+    非有限 float のみ ``str()`` に変換する（それ以外の値・構造は変えない）。
+    """
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 def _problem_body(status: int, title: str, detail: str, type_: str, extra: dict) -> dict:
     body = {"type": type_, "title": title, "status": status}
     if detail:
@@ -74,12 +92,14 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _handle_validation(_req: Request, exc: RequestValidationError) -> JSONResponse:
+        # 検証エラー詳細の input/ctx に非有限 float（Infinity/NaN 入力等）が含まれると
+        # starlette の JSON 直列化（allow_nan=False）が 500 に化けるため JSON 安全化する。
         return _problem_response(
             422,
             "入力値が不正です",
             detail="リクエストの検証に失敗しました。",
             type_="about:blank",
-            extra={"errors": exc.errors()},
+            extra={"errors": _json_safe(exc.errors())},
         )
 
 
