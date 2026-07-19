@@ -7,7 +7,7 @@
 // - タイムアウト（目安30秒）で error へ遷移し「時間がかかっています」を出す。
 // - 生成結果には常に「🤖 AI下書き・要確認」バッジ＋各ポイントに CitationBadge を併設。
 // - 生成後はシナリオ文を編集可能にし、[🔁再生成][この内容で保存] を出す。
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { StrategyDraft } from "@/lib/types";
 import { Button } from "./Button";
 import { CitationBadge } from "./CitationBadge";
@@ -41,6 +41,10 @@ export function AiGenerationPanel({ onGenerate, onSave, initial }: Props) {
   const [timedOut, setTimedOut] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
+  // 生成が実行中かを同期的に判定するガード。onGenerate（＝Azure OpenAI 課金対象の生成 API）を
+  // 再クリックで二重に発火させないための多重起動防止。state はバッチ更新で反映が遅れるため、
+  // 再レンダー前の連打も確実に弾けるよう state ではなく ref で保持する（二重課金の実費防止）。
+  const inFlightRef = useRef(false);
 
   // 保存済み下書きが後から届いた場合の復元（外部データからの初期同期のための意図的な setState）
   useEffect(() => {
@@ -53,24 +57,38 @@ export function AiGenerationPanel({ onGenerate, onSave, initial }: Props) {
   }, [initial]);
 
   const run = useCallback(async () => {
+    // 多重起動防止: 既に生成中なら再クリックを無視し onGenerate を二重発火させない（二重課金防止）。
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setSavedMsg(false);
     setTimedOut(false);
-    setState("searching");
-    await new Promise((r) => setTimeout(r, 700));
-    setState("building_context");
-    await new Promise((r) => setTimeout(r, 700));
-    setState("generating");
     try {
+      // 体感短縮: 実生成（4〜5秒）を段階演出の「前」に直列で待たず、クリック直後に即時開始し
+      // 段階表示アニメーション（各700ms）と並行させる。これで演出ぶん（約1.4秒）の純増待ちを
+      // 実処理に重ねられる。生成ロジック・数値捏造ガードは onGenerate 側のままで一切変更しない。
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS),
       );
-      const gen = await Promise.race([onGenerate(), timeout]);
+      const genPromise = Promise.race([onGenerate(), timeout]);
+      // 未処理拒否の警告を避けるため、await するまでの間だけ握っておく（後段で必ず await する）。
+      genPromise.catch(() => undefined);
+
+      setState("searching");
+      await new Promise((r) => setTimeout(r, 700));
+      setState("building_context");
+      await new Promise((r) => setTimeout(r, 700));
+      setState("generating");
+
+      const gen = await genPromise;
       setDraft(gen);
       setScenario(gen.scenario);
       setState("done");
     } catch (e) {
       setTimedOut(e instanceof Error && e.message === "timeout");
       setState("error");
+    } finally {
+      // 成否・タイムアウトいずれでもガードを解放し、再生成・再試行を可能に戻す。
+      inFlightRef.current = false;
     }
   }, [onGenerate]);
 
