@@ -62,6 +62,25 @@ def test_create_case_and_numbering(api) -> None:
     assert body["company"] == "丸紅畜産"
 
 
+def test_create_case_rejects_non_positive_quoted_price(api) -> None:
+    """提出見積は正の値のみ許可。負値・0 は API 層で 422（境界値テスト A-9 の防御層）。"""
+    for bad in (-1, 0):
+        res = api.client.post(
+            "/api/cases",
+            headers=api.headers(),
+            json={"supplierId": 1, "product": "冷凍エビ", "quotedPrice": bad, "targetPeriod": "2026Q4"},
+        )
+        assert res.status_code == 422, f"quotedPrice={bad} は 422 になるべき"
+    # 正常値（有効側境界の 0.01 と正の整数値）では従来どおり 201 で作成される（回帰確認）。
+    for good in (0.01, 1):
+        ok = api.client.post(
+            "/api/cases",
+            headers=api.headers(),
+            json={"supplierId": 1, "product": "冷凍エビ", "quotedPrice": good, "targetPeriod": "2026Q4"},
+        )
+        assert ok.status_code == 201, f"quotedPrice={good} は 201 になるべき"
+
+
 def test_create_case_rejects_unregistered_supplier(api) -> None:
     res = api.client.post(
         "/api/cases",
