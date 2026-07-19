@@ -56,6 +56,12 @@ def _warm_kre(
     往復（warm 約110ms／cold 約2.6s）が画面表示をブロックするため、BackgroundTask で裏に回す。
     障害はベストエフォートとして握り潰し、trace_id 付きで記録する（デザインガイド §3.2）。
     """
+    # 【この try/except は外さないこと】本関数は BackgroundTask としてレスポンス送出「後」に
+    # 実行される。ここで例外を送出すると Starlette の ASGI サイクル（バックグラウンド実行段）へ
+    # 伝播し、テストの TestClient（raise_server_exceptions=True 既定）ではそれが送出例外として表面化する。
+    # 契約テスト test_kre_failure_degrades_gracefully（tests/test_api_search.py）は「KRE が落ちても
+    # DB 由来の過去経緯は 200/ready で返る（部分エラー耐性）」を検証しており、ここで握り潰さないと
+    # 同テストが失敗する。本番でも KRE 障害がレスポンス済みの応答へ影響しないよう、必ず握り潰す。
     try:
         engine.retrieve(
             RetrieveRequest(

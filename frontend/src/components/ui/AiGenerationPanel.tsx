@@ -7,7 +7,7 @@
 // - タイムアウト（目安30秒）で error へ遷移し「時間がかかっています」を出す。
 // - 生成結果には常に「🤖 AI下書き・要確認」バッジ＋各ポイントに CitationBadge を併設。
 // - 生成後はシナリオ文を編集可能にし、[🔁再生成][この内容で保存] を出す。
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { StrategyDraft } from "@/lib/types";
 import { Button } from "./Button";
 import { CitationBadge } from "./CitationBadge";
@@ -41,6 +41,10 @@ export function AiGenerationPanel({ onGenerate, onSave, initial }: Props) {
   const [timedOut, setTimedOut] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
+  // 生成が実行中かを同期的に判定するガード。onGenerate（＝Azure OpenAI 課金対象の生成 API）を
+  // 再クリックで二重に発火させないための多重起動防止。state はバッチ更新で反映が遅れるため、
+  // 再レンダー前の連打も確実に弾けるよう state ではなく ref で保持する（二重課金の実費防止）。
+  const inFlightRef = useRef(false);
 
   // 保存済み下書きが後から届いた場合の復元（外部データからの初期同期のための意図的な setState）
   useEffect(() => {
@@ -53,6 +57,9 @@ export function AiGenerationPanel({ onGenerate, onSave, initial }: Props) {
   }, [initial]);
 
   const run = useCallback(async () => {
+    // 多重起動防止: 既に生成中なら再クリックを無視し onGenerate を二重発火させない（二重課金防止）。
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
     setSavedMsg(false);
     setTimedOut(false);
     try {
@@ -79,6 +86,9 @@ export function AiGenerationPanel({ onGenerate, onSave, initial }: Props) {
     } catch (e) {
       setTimedOut(e instanceof Error && e.message === "timeout");
       setState("error");
+    } finally {
+      // 成否・タイムアウトいずれでもガードを解放し、再生成・再試行を可能に戻す。
+      inFlightRef.current = false;
     }
   }, [onGenerate]);
 
