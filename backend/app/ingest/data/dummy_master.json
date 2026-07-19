@@ -99,13 +99,13 @@
   {
    "spec_id": 5,
    "product_id": 3,
-   "origin": "国産",
+   "origin": "豪州産",
    "part": "バラ(かたばら)",
-   "grade": "国産牛",
+   "grade": "輸入牛",
    "storage_type": "チルド",
-   "pack": "バラ凍結",
-   "infomart_code": "114704",
-   "spec_memo": "国産牛C/かたばら"
+   "pack": "10kg/c/s",
+   "infomart_code": "112503",
+   "spec_memo": "その他輸入牛肉C/かたばら。グローバルフーズ商事の輸入牛肉ライン(豪州産チルド)"
   },
   {
    "spec_id": 6,
@@ -162,7 +162,7 @@
    "volume_kg_month": 4500,
    "annual_volume_kg": 54000,
    "max_acceptable_price": 1250,
-   "note": "国産牛は品薄基調。相見積を前提に計画"
+   "note": "輸入牛は為替・供給ひっ迫で上昇基調。相見積を前提に計画"
   }
  ],
  "negotiation_cases": [
@@ -279,7 +279,7 @@
    "proposed_price": 1240,
    "volume_kg_month": 4000,
    "annual_volume_kg": 48000,
-   "proposed_conditions": "国産牛の品薄・相場上昇を主張",
+   "proposed_conditions": "輸入牛の供給ひっ迫・相場上昇を主張",
    "claimed_reasons": "供給不安,需要増加",
    "valid_until": "2026-03-31",
    "created_by": "鈴木",
@@ -421,13 +421,34 @@
    "landing_final": 1215,
    "walkaway_auto": 1240,
    "walkaway_final": 1240,
-   "line_edit_reason": "着地: 国産牛の品薄基調を考慮し+¥5",
+   "line_edit_reason": "着地: 輸入牛の上昇基調を考慮し+¥5",
    "impact_target": "-960,000",
    "impact_landing": "-720,000",
    "impact_walkaway": "+480,000",
-   "ai_points": "①国産牛は品薄で強気。輸入牛の相見積カードを提示し¥1180を要求 ②相場上昇は認めつつ¥1210着地を落とし所に ③小口NGの相手のため数量をまとめて交渉力を確保",
-   "ai_scenario": "オープニング: 相見積を示唆し¥1180を提示 → 譲歩ゾーン: 品薄を認め¥1200→¥1210で歩み寄る → クロージング: ¥1240超なら持ち帰り",
+   "ai_points": "①輸入牛は為替・供給ひっ迫で上昇基調。別ソース(他商社)の相見積カードを提示し¥1180を要求 ②相場上昇は認めつつ¥1210着地を落とし所に ③小口NGの相手のため数量をまとめて交渉力を確保",
+   "ai_scenario": "オープニング: 別ソースの相見積を示唆し¥1180を提示 → 譲歩ゾーン: 相場上昇を認め¥1200→¥1210で歩み寄る → クロージング: ¥1240超なら持ち帰り",
    "saved_at": "2025-11-20 10:00",
+   "data_origin": "初期データ"
+  },
+  {
+   "sheet_id": 7,
+   "case_no": "No.123459-a",
+   "price_diff": "+45",
+   "annual_impact": "+2,430,000",
+   "calc_version": "ルールv1.0",
+   "target_auto": 1215,
+   "target_final": 1215,
+   "landing_auto": 1240,
+   "landing_final": 1245,
+   "walkaway_auto": 1260,
+   "walkaway_final": 1260,
+   "line_edit_reason": "着地: 前回No.123458-aの申し送り(相見積カード)を踏まえ+¥5",
+   "impact_target": "0",
+   "impact_landing": "+1,620,000",
+   "impact_walkaway": "+2,430,000",
+   "ai_points": "①前回No.123458-a決着¥1215・申し送り(輸入牛は別ソースの相見積カードが有効)を踏まえ¥1215据置を要求 ②為替・供給の上昇は一部認めつつ¥1240着地を落とし所に ③小口NGの相手のため数量(4,500kg/月)をまとめ交渉力を確保",
+   "ai_scenario": "オープニング: 前回同様に別ソースの相見積を示唆し¥1215の据置を提示 → 譲歩ゾーン: 相場上昇を一部認め¥1230→¥1240で歩み寄る → クロージング: ¥1260超なら持ち帰り。数量増とセットで再提案",
+   "saved_at": "2026-07-10 10:00",
    "data_origin": "初期データ"
   }
  ],
@@ -512,8 +533,8 @@
    "achievement": "70%",
    "result_tags": "相場上昇を反映",
    "accepted_reasons": "供給不安",
-   "staff_memo": "国産牛が品薄で強気。相見積カードで¥1215に収めた",
-   "handover_note": "次回は輸入牛の相見積を早めに用意。小口NGなので数量をまとめて臨む",
+   "staff_memo": "輸入牛が為替高・供給ひっ迫で強気。相見積カードで¥1215に収めた",
+   "handover_note": "次回は別ソースの相見積を早めに用意。小口NGなので数量をまとめて臨む",
    "prep_hours": "3.5",
    "data_origin": "初期データ"
   }
