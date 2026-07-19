@@ -152,6 +152,17 @@
    "annual_volume_kg": 72000,
    "max_acceptable_price": 700,
    "note": null
+  },
+  {
+   "plan_id": 4,
+   "spec_id": 5,
+   "period": "2026Q3",
+   "target_cost_rate": "34.0%",
+   "planned_price": 1200,
+   "volume_kg_month": 4500,
+   "annual_volume_kg": 54000,
+   "max_acceptable_price": 1250,
+   "note": "国産牛は品薄基調。相見積を前提に計画"
   }
  ],
  "negotiation_cases": [
@@ -238,6 +249,57 @@
    "claimed_reasons": "不明・要確認",
    "valid_until": "2025-06-30",
    "created_by": "田中",
+   "data_origin": "初期データ"
+  },
+  {
+   "case_no": "No.123457-a",
+   "supplier_id": 2,
+   "spec_id": 4,
+   "period": "2026Q3",
+   "case_type": "値上げ要請",
+   "status": "交渉中",
+   "current_price": 670,
+   "proposed_price": 690,
+   "volume_kg_month": 6000,
+   "annual_volume_kg": 72000,
+   "proposed_conditions": "改定要請。チルド品質の維持を条件に提示",
+   "claimed_reasons": "原材料・飼料価格,人件費・加工費",
+   "valid_until": "2026-07-31",
+   "created_by": "佐藤",
+   "data_origin": "初期データ"
+  },
+  {
+   "case_no": "No.123458-a",
+   "supplier_id": 3,
+   "spec_id": 5,
+   "period": "2026Q1",
+   "case_type": "値上げ要請",
+   "status": "完了",
+   "current_price": 1180,
+   "proposed_price": 1240,
+   "volume_kg_month": 4000,
+   "annual_volume_kg": 48000,
+   "proposed_conditions": "国産牛の品薄・相場上昇を主張",
+   "claimed_reasons": "供給不安,需要増加",
+   "valid_until": "2026-03-31",
+   "created_by": "鈴木",
+   "data_origin": "初期データ"
+  },
+  {
+   "case_no": "No.123459-a",
+   "supplier_id": 3,
+   "spec_id": 5,
+   "period": "2026Q3",
+   "case_type": "値上げ要請",
+   "status": "交渉中",
+   "current_price": 1215,
+   "proposed_price": 1260,
+   "volume_kg_month": 4500,
+   "annual_volume_kg": 54000,
+   "proposed_conditions": "改定要請。数量増で調整余地あり",
+   "claimed_reasons": "為替影響,物流費・燃料費",
+   "valid_until": "2026-08-31",
+   "created_by": "鈴木",
    "data_origin": "初期データ"
   }
  ],
@@ -346,6 +408,27 @@
    "ai_scenario": "(省略)",
    "saved_at": "2025-06-15 11:00",
    "data_origin": "初期データ"
+  },
+  {
+   "sheet_id": 6,
+   "case_no": "No.123458-a",
+   "price_diff": "+60",
+   "annual_impact": "+2,880,000",
+   "calc_version": "ルールv1.0",
+   "target_auto": 1180,
+   "target_final": 1180,
+   "landing_auto": 1210,
+   "landing_final": 1215,
+   "walkaway_auto": 1240,
+   "walkaway_final": 1240,
+   "line_edit_reason": "着地: 国産牛の品薄基調を考慮し+¥5",
+   "impact_target": "-960,000",
+   "impact_landing": "-720,000",
+   "impact_walkaway": "+480,000",
+   "ai_points": "①国産牛は品薄で強気。輸入牛の相見積カードを提示し¥1180を要求 ②相場上昇は認めつつ¥1210着地を落とし所に ③小口NGの相手のため数量をまとめて交渉力を確保",
+   "ai_scenario": "オープニング: 相見積を示唆し¥1180を提示 → 譲歩ゾーン: 品薄を認め¥1200→¥1210で歩み寄る → クロージング: ¥1240超なら持ち帰り",
+   "saved_at": "2025-11-20 10:00",
+   "data_origin": "初期データ"
   }
  ],
  "negotiation_results": [
@@ -415,6 +498,23 @@
    "staff_memo": "数量増(+2,000kg/月)で目標超え決着",
    "handover_note": "数量カードは丸紅に有効",
    "prep_hours": "2.5",
+   "data_origin": "初期データ"
+  },
+  {
+   "result_id": 5,
+   "case_no": "No.123458-a",
+   "result_date": "2025-12-20",
+   "final_price": 1215,
+   "delivery_term": "2026/01〜03 月1回",
+   "payment_site": "月末締め翌月末払い",
+   "vs_quote": "-25",
+   "vs_landing": "0",
+   "achievement": "70%",
+   "result_tags": "相場上昇を反映",
+   "accepted_reasons": "供給不安",
+   "staff_memo": "国産牛が品薄で強気。相見積カードで¥1215に収めた",
+   "handover_note": "次回は輸入牛の相見積を早めに用意。小口NGなので数量をまとめて臨む",
+   "prep_hours": "3.5",
    "data_origin": "初期データ"
   }
  ],

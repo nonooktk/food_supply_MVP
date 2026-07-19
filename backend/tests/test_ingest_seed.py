@@ -27,11 +27,11 @@ def test_seed_all_counts(db_session: Session) -> None:
     assert _count(db_session, m.Supplier) == 4
     assert _count(db_session, m.Product) == 4
     assert _count(db_session, m.ProductSpec) == 6
-    assert _count(db_session, m.CompanyPlan) == 3
+    assert _count(db_session, m.CompanyPlan) == 4
     assert _count(db_session, m.MarketRate) == 12
-    assert _count(db_session, m.NegotiationCase) == 5
-    assert _count(db_session, m.StrategySheet) == 5
-    assert _count(db_session, m.NegotiationResult) == 4
+    assert _count(db_session, m.NegotiationCase) == 8
+    assert _count(db_session, m.StrategySheet) == 6
+    assert _count(db_session, m.NegotiationResult) == 5
     assert _count(db_session, m.RawImport) == 12
     assert _count(db_session, m.ModelVersion) == 2
     assert counts["market_rates_import"] == {"raw": 12, "normalized": 12, "rejected": 0}
