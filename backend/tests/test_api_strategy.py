@@ -119,3 +119,31 @@ def test_put_saves_edited_scenario(api, fake_ai) -> None:
 def test_generate_404_for_unknown_case(api, fake_ai) -> None:
     res = api.client.post("/api/cases/No.NOPE/strategy/generate", headers=api.headers())
     assert res.status_code == 404
+
+
+def test_seeded_sheet_returns_array_points_without_ai(api) -> None:
+    """シード同梱の作戦シート（No.123459-a）は AI 生成を呼ばずに GET で下書きを返し、
+    ai_points が交渉ポイントの配列として復元される（issue #8 レビュー是正2）。
+
+    fake_ai を注入せず・generate も呼ばないため、Azure OpenAI 未設定でも④画面が
+    完走できること（502 にならないこと）の回帰防止テスト。先頭ポイントは判断継承
+    ループ（BR-10）どおり前案件 No.123458-a を引用する。
+    """
+    res = api.client.get("/api/cases/No.123459-a/strategy", headers=api.headers())
+    assert res.status_code == 200
+    body = res.json()
+    assert body is not None  # 保存済みシートがあるため null（=未生成）にならない
+    assert isinstance(body["points"], list) and len(body["points"]) >= 1
+    assert body["scenario"]
+    # プロ―ズ文字列でなく、各ポイントが {text, citations} 構造で復元されること
+    assert all("text" in p and isinstance(p["citations"], list) for p in body["points"])
+    cites = body["points"][0]["citations"]
+    assert cites and cites[0]["caseNo"] == "No.123458-a"
+
+
+def test_all_seeded_sheets_expose_points_as_array(api) -> None:
+    """代表的なシード作戦シートの GET /strategy が、いずれも ai_points を配列で返す。"""
+    for case_no in ("No.123456-a", "No.123458-a", "No.123459-a", "No.123455-a"):
+        body = api.client.get(f"/api/cases/{case_no}/strategy", headers=api.headers()).json()
+        assert body is not None, f"{case_no}: 保存済み下書きが null"
+        assert isinstance(body["points"], list) and len(body["points"]) >= 1, f"{case_no}: ポイントが配列でない"

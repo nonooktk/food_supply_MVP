@@ -8,14 +8,16 @@ from app.db import models as m
 
 
 def test_list_cases(api) -> None:
-    """seed の5案件が一覧に出る（camelCase・表示名整形）。"""
+    """seed の代表案件（既存5件＋デモ追加3件＝8件）が一覧に出る（camelCase・表示名整形）。"""
     res = api.client.get("/api/cases", headers=api.headers())
     assert res.status_code == 200
     body = res.json()
-    assert body["total"] == 5
+    assert body["total"] == 8
     first = body["items"][0]
     assert set(first.keys()) >= {"caseNo", "company", "product", "status", "updatedAt", "assignee", "quotedPrice"}
-    assert first["company"] == "丸紅畜産"
+    # 表示名整形の確認は順序非依存で行う（seed 追加により先頭案件は固定しないため）。
+    marubeni = next(it for it in body["items"] if it["caseNo"] == "No.123456-a")
+    assert marubeni["company"] == "丸紅畜産"
 
 
 def test_filter_by_status(api) -> None:
