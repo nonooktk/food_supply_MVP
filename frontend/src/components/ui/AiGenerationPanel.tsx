@@ -55,16 +55,24 @@ export function AiGenerationPanel({ onGenerate, onSave, initial }: Props) {
   const run = useCallback(async () => {
     setSavedMsg(false);
     setTimedOut(false);
-    setState("searching");
-    await new Promise((r) => setTimeout(r, 700));
-    setState("building_context");
-    await new Promise((r) => setTimeout(r, 700));
-    setState("generating");
     try {
+      // 体感短縮: 実生成（4〜5秒）を段階演出の「前」に直列で待たず、クリック直後に即時開始し
+      // 段階表示アニメーション（各700ms）と並行させる。これで演出ぶん（約1.4秒）の純増待ちを
+      // 実処理に重ねられる。生成ロジック・数値捏造ガードは onGenerate 側のままで一切変更しない。
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("timeout")), TIMEOUT_MS),
       );
-      const gen = await Promise.race([onGenerate(), timeout]);
+      const genPromise = Promise.race([onGenerate(), timeout]);
+      // 未処理拒否の警告を避けるため、await するまでの間だけ握っておく（後段で必ず await する）。
+      genPromise.catch(() => undefined);
+
+      setState("searching");
+      await new Promise((r) => setTimeout(r, 700));
+      setState("building_context");
+      await new Promise((r) => setTimeout(r, 700));
+      setState("generating");
+
+      const gen = await genPromise;
       setDraft(gen);
       setScenario(gen.scenario);
       setState("done");
