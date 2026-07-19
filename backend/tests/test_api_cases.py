@@ -81,6 +81,27 @@ def test_create_case_rejects_non_positive_quoted_price(api) -> None:
         assert ok.status_code == 201, f"quotedPrice={good} は 201 になるべき"
 
 
+def test_create_case_rejects_non_finite_quoted_price(api) -> None:
+    """Infinity/NaN は 422 で拒否する（500 に化けないこと）。
+
+    allow_inf_nan=False 追加で顕在化した検証エラーハンドラの潜在バグの回帰テスト。
+    エラー詳細に含まれる非有限 float が JSON 直列化（starlette は allow_nan=False）で
+    500 を起こしていた（errors.py の _json_safe で文字列化して防止）。
+    httpx（TestClient）の json= は allow_nan=False で inf/NaN を送れないため、
+    JSON 拡張リテラル（Infinity/NaN）を含む生ボディを content= で直接送る。
+    サーバ側の json.loads は既定でこれを受理し、pydantic が finite_number で弾く。
+    """
+    headers = {**api.headers(), "Content-Type": "application/json"}
+    for literal in ("Infinity", "-Infinity", "NaN"):
+        raw = (
+            '{"supplierId":1,"product":"冷凍エビ",'
+            f'"quotedPrice":{literal},"targetPeriod":"2026Q4"}}'
+        )
+        res = api.client.post("/api/cases", headers=headers, content=raw.encode("utf-8"))
+        assert res.status_code == 422, f"quotedPrice={literal} は 422 になるべき（500 でないこと）"
+        assert res.headers["content-type"] == "application/problem+json"
+
+
 def test_create_case_rejects_unregistered_supplier(api) -> None:
     res = api.client.post(
         "/api/cases",
