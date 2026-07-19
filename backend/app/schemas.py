@@ -71,10 +71,10 @@ class CaseListResult(CamelModel):
 class CaseCreateInput(CamelModel):
     supplier_id: int
     product: str
-    # 提出見積は正の値のみ許可する。フロントの validate に加えて API 層でも防御する
-    # （境界値テスト A-9 で quotedPrice=-1 が 201 で受理される防御層欠落を検出。
-    #  RateManualInput.price_yen_kg と同じ gt=0 制約に揃える）。
-    quoted_price: float = Field(gt=0)
+    # 提出見積は正の有限値のみ許可する。フロントの validate に加えて API 層でも防御する
+    # （境界値テスト A-9 で quotedPrice=-1 が 201 で受理される防御層欠落を検出）。
+    # JSON パースは Infinity/NaN を通し得るため allow_inf_nan=False で有限値に限定する。
+    quoted_price: float = Field(gt=0, allow_inf_nan=False)
     target_period: str
 
 

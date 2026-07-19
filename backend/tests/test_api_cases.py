@@ -71,13 +71,14 @@ def test_create_case_rejects_non_positive_quoted_price(api) -> None:
             json={"supplierId": 1, "product": "冷凍エビ", "quotedPrice": bad, "targetPeriod": "2026Q4"},
         )
         assert res.status_code == 422, f"quotedPrice={bad} は 422 になるべき"
-    # 正常値（正の値）では従来どおり 201 で作成される（回帰確認）。
-    ok = api.client.post(
-        "/api/cases",
-        headers=api.headers(),
-        json={"supplierId": 1, "product": "冷凍エビ", "quotedPrice": 1, "targetPeriod": "2026Q4"},
-    )
-    assert ok.status_code == 201
+    # 正常値（有効側境界の 0.01 と正の整数値）では従来どおり 201 で作成される（回帰確認）。
+    for good in (0.01, 1):
+        ok = api.client.post(
+            "/api/cases",
+            headers=api.headers(),
+            json={"supplierId": 1, "product": "冷凍エビ", "quotedPrice": good, "targetPeriod": "2026Q4"},
+        )
+        assert ok.status_code == 201, f"quotedPrice={good} は 201 になるべき"
 
 
 def test_create_case_rejects_unregistered_supplier(api) -> None:
