@@ -21,7 +21,7 @@ PyMySQL==1.1.1
 alembic==1.14.0
 
 # ----- LLM / 検索（KRE から利用） -----
-openai==1.59.6
+openai==2.46.0
 azure-search-documents==11.5.2
 
 # ----- ナレッジグラフ -----
