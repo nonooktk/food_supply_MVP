@@ -34,7 +34,7 @@ PyYAML==6.0.3
 google-auth==2.38.0
 
 # ----- 観測性（構造化ログ） -----
-structlog==24.4.0
+structlog==26.1.0
 
 # ----- テスト -----
 pytest==8.3.4
