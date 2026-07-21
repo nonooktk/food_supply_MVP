@@ -37,5 +37,5 @@ google-auth==2.38.0
 structlog==24.4.0
 
 # ----- テスト -----
-pytest==8.3.4
+pytest==9.1.1
 httpx==0.28.1
