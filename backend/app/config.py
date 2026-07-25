@@ -15,7 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/ ディレクトリの絶対パス。このファイルは backend/app/config.py なので、2つ上が backend/。
@@ -82,6 +82,10 @@ class Settings(BaseSettings):
     auth_mode: str = Field("mock", alias="AUTH_MODE")
     # Google のクライアントID（aud 検証に使用。秘匿値ではない）。google モードでは必須。
     google_client_id: str = Field("", alias="GOOGLE_CLIENT_ID")
+    # 利用を許可する Google アカウントの email（カンマ区切り）。
+    # google モードでは必須（空＝全世界の Google アカウントに開放 になるため起動を止める）。
+    # GCP の User Type が External の場合、allowlist だけが「誰が入れるか」を決める唯一の関門。
+    allowed_emails_raw: str = Field("", alias="ALLOWED_EMAILS")
 
     # ===== CORS =====
     cors_origins_raw: str = Field("http://localhost:3000", alias="CORS_ORIGINS")
@@ -102,6 +106,53 @@ class Settings(BaseSettings):
     def cors_origins(self) -> list[str]:
         """CORS_ORIGINS をカンマ区切りで分解したリストを返す。"""
         return [o.strip().rstrip("/") for o in self.cors_origins_raw.split(",") if o.strip()]
+
+    # ===== 認証まわりの正規化ヘルパ =====
+    @property
+    def normalized_auth_mode(self) -> str:
+        """AUTH_MODE を小文字・トリム済みで返す（"Mock" 等の表記ゆれ対策）。"""
+        return self.auth_mode.strip().lower()
+
+    @property
+    def is_production(self) -> bool:
+        """APP_ENV が production か（本番ガードの判定基準）。"""
+        return self.app_env.strip().lower() == "production"
+
+    @property
+    def allowed_emails(self) -> list[str]:
+        """ALLOWED_EMAILS をカンマ区切りで分解し、小文字化して返す（照合用の正規形）。"""
+        return [e.strip().lower() for e in self.allowed_emails_raw.split(",") if e.strip()]
+
+    @model_validator(mode="after")
+    def _validate_auth_settings(self) -> "Settings":
+        """認証設定の不整合を **起動時に** 失敗させる（fail-fast・セキュリティ監査 F-3）。
+
+        設定ミス一発で認証が全開放になる組み合わせを、起動前に潰す。
+        - 本番（APP_ENV=production）で AUTH_MODE=mock … パスワード無検証のモックログインが開く。
+        - AUTH_MODE=google で GOOGLE_CLIENT_ID 未設定 … ID トークンの aud 検証ができない。
+        - AUTH_MODE=google で ALLOWED_EMAILS 未設定 … 任意の Google アカウントが入れる（F-2 の担保）。
+
+        注: 本検証は Settings 構築時にのみ走る（validate_assignment は無効）。テストが
+        インスタンス属性を monkeypatch で差し替える既存のやり方は従来どおり動く。
+        """
+        mode = self.normalized_auth_mode
+        if self.is_production and mode == "mock":
+            raise ValueError(
+                "APP_ENV=production では AUTH_MODE=mock を使用できません"
+                "（モックログインはパスワードを検証しません）。AUTH_MODE=google を設定してください。"
+            )
+        if mode == "google":
+            if not self.google_client_id.strip():
+                raise ValueError(
+                    "AUTH_MODE=google には GOOGLE_CLIENT_ID が必須です"
+                    "（ID トークンの aud を検証できません）。"
+                )
+            if not self.allowed_emails:
+                raise ValueError(
+                    "AUTH_MODE=google には ALLOWED_EMAILS（カンマ区切りの許可 email）が必須です"
+                    "（未設定だと任意の Google アカウントが利用できてしまいます）。"
+                )
+        return self
 
     def resolved_sqlite_path(self) -> str:
         """SQLITE_PATH を backend ディレクトリ基準の絶対パスへ解決する。

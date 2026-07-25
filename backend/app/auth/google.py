@@ -22,12 +22,23 @@ class GoogleAuthError(ValueError):
 
 
 class GoogleIdentity:
-    """検証済みの Google アカウント情報。"""
+    """検証済みの Google アカウント情報。
 
-    def __init__(self, sub: str, email: str | None, name: str | None) -> None:
+    ``email_verified`` は Google 側で所有確認済みの email かどうか（未確認 email を
+    身元として使わないための判定材料。実際の拒否は app/auth/policy.py で行う）。
+    """
+
+    def __init__(
+        self,
+        sub: str,
+        email: str | None,
+        name: str | None,
+        email_verified: bool | None = None,
+    ) -> None:
         self.sub = sub
         self.email = email
         self.name = name
+        self.email_verified = email_verified
 
 
 def verify_google_credential(credential: str) -> GoogleIdentity:
@@ -66,4 +77,17 @@ def verify_google_credential(credential: str) -> GoogleIdentity:
     sub = info.get("sub")
     if not sub:
         raise GoogleAuthError("ID トークンに sub が含まれていません。")
-    return GoogleIdentity(sub=sub, email=info.get("email"), name=info.get("name"))
+    # email_verified は文字列 "true" で来る実装もあるため、bool へ正規化して保持する。
+    raw_verified = info.get("email_verified")
+    if isinstance(raw_verified, str):
+        email_verified: bool | None = raw_verified.strip().lower() == "true"
+    elif isinstance(raw_verified, bool):
+        email_verified = raw_verified
+    else:
+        email_verified = None
+    return GoogleIdentity(
+        sub=sub,
+        email=info.get("email"),
+        name=info.get("name"),
+        email_verified=email_verified,
+    )
