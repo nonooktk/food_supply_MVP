@@ -36,6 +36,6 @@ google-auth==2.38.0
 # ----- 観測性（構造化ログ） -----
 structlog==24.4.0
 
-# ----- テスト -----
-pytest==8.3.4
-httpx==0.28.1
+# ----- テスト依存は requirements-dev.txt へ分離した（監査 F-11・2026-07-26） -----
+# 本番イメージ（Dockerfile が本ファイルのみを pip install する）にテストフレームワークを
+# 同梱しないため。開発・CI では `pip install -r requirements-dev.txt` を使う。
