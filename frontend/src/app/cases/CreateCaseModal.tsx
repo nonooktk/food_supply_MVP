@@ -6,7 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Field, TextField } from "@/components/ui/Form";
+import { ErrorBanner } from "@/components/ui/states";
 import { api } from "@/lib/api";
+import { MAX_PERIOD_LEN, MAX_PRODUCT_LEN, lengthError } from "@/lib/limits";
 import type { CaseDetail, Supplier } from "@/lib/types";
 
 interface Props {
@@ -31,6 +33,8 @@ export function CreateCaseModal({ open, onClose, onCreated }: Props) {
   const [quotedPrice, setQuotedPrice] = useState("");
   const [targetPeriod, setTargetPeriod] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
+  // 保存失敗時に表示する文言。API のエラー本文（problem+json の title）をそのまま伝える。
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -70,6 +74,10 @@ export function CreateCaseModal({ open, onClose, onCreated }: Props) {
     if (quotedPrice.trim() === "" || Number.isNaN(price) || price <= 0)
       e.quotedPrice = "提出見積（円/kg）を正の数で入力してください。";
     if (targetPeriod.trim() === "") e.targetPeriod = "交渉時期を入力してください。";
+    // 上限超過は API が 422 を返す（監査 F-7）。入力欄の maxLength が効かない経路
+    // （プログラム的な値の流し込み等）に備え、送信前にも弾く。
+    e.product ??= lengthError("商材", product.trim(), MAX_PRODUCT_LEN);
+    e.targetPeriod ??= lengthError("交渉時期", targetPeriod.trim(), MAX_PERIOD_LEN);
     return e;
   }
 
@@ -77,11 +85,12 @@ export function CreateCaseModal({ open, onClose, onCreated }: Props) {
     e.preventDefault();
     const errs = validate();
     setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+    if (Object.values(errs).some(Boolean)) return;
     // validate 済みでも、非同期送信直前の契約を明示しておく。
     if (supplierId === null) return;
 
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const detail = await api.createCase({
         supplierId,
@@ -97,14 +106,26 @@ export function CreateCaseModal({ open, onClose, onCreated }: Props) {
       setTargetPeriod("");
       setErrors({});
       onCreated(detail);
+    } catch (err) {
+      // API は RFC7807 で title を返す（入力長超過等の 422 は「入力値が不正です」）。
+      // 握り潰すと利用者には「押しても何も起きない」状態になるため、必ず画面に出す。
+      const reason = err instanceof Error && err.message ? err.message : "案件を作成できませんでした。";
+      setSubmitError(`${reason}（入力内容はそのままです。修正のうえ、もう一度お試しください）`);
     } finally {
       setSubmitting(false);
     }
   }
 
+  /** 閉じるときに失敗メッセージを消し、開き直したときに前回のエラーを引きずらないようにする。 */
+  function handleClose() {
+    setSubmitError(null);
+    onClose();
+  }
+
   return (
-    <Modal open={open} onClose={onClose} title="新規案件作成">
+    <Modal open={open} onClose={handleClose} title="新規案件作成">
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
+        {submitError && <ErrorBanner message={submitError} />}
         <Field label="取引先企業" required error={errors.supplier || suppliersError} htmlFor="supplier-search">
           <div className="space-y-2">
             <input
@@ -159,8 +180,10 @@ export function CreateCaseModal({ open, onClose, onCreated }: Props) {
           label="商材（規格含む）"
           required
           value={product}
+          maxLength={MAX_PRODUCT_LEN}
           onChange={(e) => setProduct(e.target.value)}
           error={errors.product}
+          hint={`${MAX_PRODUCT_LEN}文字以内`}
           placeholder="例: 鶏もも肉（ブラジル産・冷凍）"
         />
         <TextField
@@ -177,8 +200,10 @@ export function CreateCaseModal({ open, onClose, onCreated }: Props) {
           label="交渉時期"
           required
           value={targetPeriod}
+          maxLength={MAX_PERIOD_LEN}
           onChange={(e) => setTargetPeriod(e.target.value)}
           error={errors.targetPeriod}
+          hint={`${MAX_PERIOD_LEN}文字以内`}
           placeholder="例: 2026Q3"
         />
 
