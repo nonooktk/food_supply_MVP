@@ -111,3 +111,82 @@ def test_unregistered_tenant_yields_no_data(stub: StubRetrievalEngine) -> None:
     """未登録テナントには一切データを返さない（越境以前にゼロ件）。"""
     result = stub.retrieve(_req("t-ghost"))
     assert _all_identifiers(result) == []
+
+
+# ==============================================================================
+# summary_text の越境検査（監査 F-9）
+# ==============================================================================
+# 背景: enforce_tenant_boundary は id 接頭辞で hits / citations / nodes / edges を濾すが、
+# summary_text は自然文のため接頭辞では濾せず、従来は素通しだった。この要約は
+# app/api/strategy.py 経由で LLM プロンプト → 画面まで届く唯一の非フィルタ経路であり、
+# グラフ生成の不具合・索引再構築時の取り違え・将来のクロステナント補完追加で他テナントの
+# 取引先名が載ると、二層防御が両方とも素通しになる。対策は fail-closed の2段判定
+#   (1) グラフ（node/edge）に越境要素があれば要約を破棄
+#   (2) 要約中に他テナント（所属不明含む）の id トークンがあれば破棄
+# である（詳細は kre/stub.py の _summary_within_boundary）。
+
+
+def _clean_result(summary_text: str) -> RetrieveResult:
+    """越境要素を含まない（＝正常系の）t-frd 結果。"""
+    return RetrieveResult(
+        hits=[
+            Hit(id="t-frd:case:No.500023", source="case", score=0.9, snippet="自社",
+                ref=Ref(table="negotiation_cases", pk="No.500023")),
+        ],
+        graph_context=GraphContext(
+            nodes=[GraphNode(id="t-frd:sup:12", type="supplier", label="丸紅畜産")],
+            edges=[],
+            summary_text=summary_text,
+        ),
+        citations=[],
+        config_version="retrieval-2026-07-09",
+    )
+
+
+def test_summary_text_survives_when_graph_is_clean() -> None:
+    """正常系: 汚染が無ければ要約はそのまま保持される（情報量を落とさない）。"""
+    cleaned = enforce_tenant_boundary(_clean_result("丸紅畜産の鶏もも肉は飼料高騰で反復値上げ。"), "t-frd")
+    assert cleaned.graph_context.summary_text == "丸紅畜産の鶏もも肉は飼料高騰で反復値上げ。"
+
+
+def test_summary_text_dropped_when_graph_contaminated() -> None:
+    """グラフに他テナントノードが混入した結果の要約は、自然文でも破棄される（fail-closed）。
+
+    汚染 result の要約に他テナントの取引先名が載っていても、接頭辞判定では検出できない。
+    「同じ汚染グラフから作られた要約は信頼しない」という判定でこの穴を塞ぐ。
+    """
+    poisoned = _poisoned_result()
+    poisoned.graph_context.summary_text = "スターゼン(他テナント)の豚バラ肉は為替変動で値上げ。"
+    cleaned = enforce_tenant_boundary(poisoned, "t-frd")
+    assert cleaned.graph_context.summary_text == ""
+    # 他テナントの取引先名が本体（LLM プロンプト）へ渡らないこと。
+    assert "スターゼン" not in cleaned.graph_context.summary_text
+
+
+def test_summary_text_dropped_when_foreign_id_token_present() -> None:
+    """グラフが清潔でも、要約中に他テナントの id トークンがあれば破棄する。"""
+    cleaned = enforce_tenant_boundary(
+        _clean_result("関連: t-acme:case:No.700088 の値上げ事例を参照。"), "t-frd"
+    )
+    assert cleaned.graph_context.summary_text == ""
+
+
+def test_summary_text_dropped_when_id_namespace_unknown() -> None:
+    """所属不明（名前空間の壊れた id）も他テナント扱いで破棄する（fail-closed）。"""
+    cleaned = enforce_tenant_boundary(_clean_result("関連: broken:case:No.1 を参照。"), "t-frd")
+    assert cleaned.graph_context.summary_text == ""
+
+
+def test_stub_retrieve_drops_contaminated_summary() -> None:
+    """retrieve 経由（本体が実際に使う経路）でも汚染要約が渡らないこと。"""
+    poisoned = _poisoned_result()
+    poisoned.graph_context.summary_text = "スターゼン(他テナント)の事例。"
+    engine = StubRetrievalEngine({"t-frd": poisoned})
+    result = engine.retrieve(_req("t-frd"))
+    assert result.graph_context.summary_text == ""
+
+
+def test_bundled_fixture_summary_is_preserved(stub: StubRetrievalEngine) -> None:
+    """同梱 fixture（清潔）の要約は従来どおり本体へ供給される＝回帰しないこと。"""
+    result = stub.retrieve(_req("t-frd"))
+    assert result.graph_context.summary_text, "正常系で要約が消えてはならない"

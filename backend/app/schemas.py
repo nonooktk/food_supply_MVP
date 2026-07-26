@@ -26,6 +26,16 @@ class CamelModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
+# ---- 自由記述の長さ上限（監査 F-7 プロンプトインジェクション対策） ---------------
+# 所感・申し送り・商材名は AI 生成のプロンプトへ逐語で載る（app/llm/strategy_generator.py）。
+# 長文の指示文を注入されるのを防ぐため、**書込（リクエスト）時のみ**上限で弾く（超過は 422）。
+# レスポンス側（ResultRecord 等）には上限を課さない：既存データが上限を超えていても読込が
+# 例外で落ちないようにするため（防御は読込側の切り詰めで担保する）。
+MAX_MEMO_LEN = 1000  # 交渉所感 staff_memo ／ 申し送り handover_note ／ 旧 note
+MAX_PRODUCT_LEN = 100  # 商材名
+MAX_PERIOD_LEN = 50  # 対象時期（表示用の短い文字列）
+
+
 # ---- 認証 --------------------------------------------------------------------
 class LoginRequest(CamelModel):
     tenant: str
@@ -70,12 +80,16 @@ class CaseListResult(CamelModel):
 
 class CaseCreateInput(CamelModel):
     supplier_id: int
-    product: str
+    # 商材名は AI 生成のプロンプトへ載る自由記述（監査 F-7）。長文の指示文を注入されないよう、
+    # 書込時に長さ上限で弾く（読込時は既存データを壊さないため上限を課さない。
+    # 上限超過の既存行は app/llm/strategy_generator.py 側で切り詰めて載せる）。
+    product: str = Field(max_length=MAX_PRODUCT_LEN)
     # 提出見積は正の有限値のみ許可する。フロントの validate に加えて API 層でも防御する
     # （境界値テスト A-9 で quotedPrice=-1 が 201 で受理される防御層欠落を検出）。
     # JSON パースは Infinity/NaN を通し得るため allow_inf_nan=False で有限値に限定する。
     quoted_price: float = Field(gt=0, allow_inf_nan=False)
-    target_period: str
+    # 対象時期も過去経緯としてプロンプトへ載るため、同様に上限を課す（監査 F-7）。
+    target_period: str = Field(max_length=MAX_PERIOD_LEN)
 
 
 class CaseStatusUpdate(CamelModel):
@@ -207,11 +221,12 @@ class ResultInput(CamelModel):
     # 所感（今回案件の記録）／申し送り（次回案件への判断材料）を別項目で保持（issue #6）。
     # 既定は None（＝未送信）。明示的な空文字（""）＝クリア指示と区別するため str ではなく Optional
     # とする（issue #6 レビュー是正: 未送信と空文字の混同でフォールバック優先が崩れるのを防ぐ）。
-    staff_memo: Optional[str] = None  # 所感（今回の記録）→ negotiation_results.staff_memo
-    handover_note: Optional[str] = None  # 次回への申し送り（次回の判断材料）→ handover_note
+    # 3項目とも AI 生成のプロンプトへ載るため、書込時に長さ上限を課す（監査 F-7）。
+    staff_memo: Optional[str] = Field(default=None, max_length=MAX_MEMO_LEN)  # 所感（今回の記録）
+    handover_note: Optional[str] = Field(default=None, max_length=MAX_MEMO_LEN)  # 次回への申し送り
     # 【後方互換・移行用／次リリースで削除予定】旧クライアントは note 1項目のみ送る。
     # note → 効いた場合の解決は resolved_staff_memo / resolved_handover_note で行う（issue #6 レビュー是正）。
-    note: Optional[str] = None  # 旧 API 互換の所感入力（廃止予定）
+    note: Optional[str] = Field(default=None, max_length=MAX_MEMO_LEN)  # 旧 API 互換の所感入力（廃止予定）
 
     @property
     def resolved_staff_memo(self) -> str:
