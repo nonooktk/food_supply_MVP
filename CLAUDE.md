@@ -62,7 +62,9 @@ source .venv/bin/activate         # Windows は .venv\Scripts\activate
 
 # 2. 依存パッケージをインストール
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
+#   本番依存（requirements.txt）＋テスト依存（pytest / httpx）が入る。
+#   requirements.txt は本番イメージ用でテスト依存を含まない（監査 F-11・2026-07-26）。
 
 # 3. 環境変数ファイルを用意
 cp .env.example .env
@@ -134,9 +136,25 @@ npm run dev
    DI で切り替えます。契約（Pydantic モデル・JSON Schema）を変更する場合は本体側への影響を必ず確認してください。
 
 4. **認証は `AUTH_MODE` シームで切替**（`backend/app/config.py` の `Settings.auth_mode`）。
-   - `mock`（既定）: 開発・テスト用。外部認証サービスへの接続不要。
+   - `mock`（既定）: **ローカル開発・テスト専用**。`X-Tenant-Id` / `X-User-Id` ヘッダー方式。
+     外部認証サービスへの接続不要。`APP_ENV=production` との併用は起動時に拒否される。
    - `google`: Google Identity Services（GIS）による ID トークン検証（`backend/app/auth/google.py`）。
-     利用には `GOOGLE_CLIENT_ID` の設定が必要（後述「既知の制約」参照）。
+     利用には `GOOGLE_CLIENT_ID` と `ALLOWED_EMAILS` の設定が必要（後述「既知の制約」参照）。
+
+   **google モードの認証フロー（2026-07-26 セキュリティ監査 F-1/F-2/F-3 対応で改修）**:
+   - フロントは GIS で得た **ID トークンを保持** し、全リクエストに
+     `Authorization: Bearer <id_token>` を付ける（`frontend/src/lib/authStorage.ts`）。
+   - バックエンドは **毎リクエスト** そのトークンを検証し（署名・aud・exp）、
+     `email_verified` を確認のうえ `ALLOWED_EMAILS` の allowlist と照合してテナントを解決する
+     （`backend/app/api/deps.py` の `get_principal`）。
+   - **`X-Tenant-Id` / `X-User-Id` は google モードでは一切参照しない。**
+     クライアントが自称する識別子を認可に使わない（旧実装はこれを信用しており、
+     テナント UUID を知る者が全データを読めた＝ Blocker F-1）。
+   - allowlist 照合は `backend/app/auth/policy.py` の `authorize_google_identity()` に集約し、
+     ログイン（`POST /api/auth/google`）と Bearer 検証の **両経路** から必ず通す。
+     片方だけに置くと素通りする経路が残るため、**関門を分散させないこと**。
+   - ID トークンの寿命は約1時間。期限切れは 401 を返し、フロントは資格情報を破棄して
+     再ログインへ誘導する（サイレント更新は現状スコープ外）。
 
 5. **コミットメッセージは日本語**で書いてください。
 
@@ -183,9 +201,20 @@ npm run lint
 
 ## 既知の制約
 
-- **Google 認証（`AUTH_MODE=google`）を使うには GCP クライアント ID が必要**です
-  （`GOOGLE_CLIENT_ID` / フロントの `NEXT_PUBLIC_GOOGLE_CLIENT_ID`）。未設定でも `AUTH_MODE=mock`
-  （既定）でモック認証を使えば開発を継続できます。
+- **Google 認証（`AUTH_MODE=google`）を使うには GCP クライアント ID と許可アカウント一覧が必要**です
+  （`GOOGLE_CLIENT_ID` / フロントの `NEXT_PUBLIC_GOOGLE_CLIENT_ID` / `ALLOWED_EMAILS`）。
+  未設定でも `AUTH_MODE=mock`（既定）でモック認証を使えば開発を継続できます。
+- **起動時に設定を検証します（fail-fast・`Settings` の `model_validator`）。** 次の組み合わせは
+  起動に失敗します。設定ミス一発で認証が全開放になるのを防ぐためです。
+  - `APP_ENV=production` かつ `AUTH_MODE=mock`（モックログインはパスワードを検証しない）
+  - `AUTH_MODE=google` かつ `GOOGLE_CLIENT_ID` が空（aud を検証できない）
+  - `AUTH_MODE=google` かつ `ALLOWED_EMAILS` が空（任意の Google アカウントが入れてしまう）
+- **`ALLOWED_EMAILS` は「誰が入れるか」を決める唯一の関門です。** GCP の User Type が
+  External の場合、Google 側は全世界のアカウントにログインを許すため、ここに列挙した
+  email 以外は 403 で拒否されます（カンマ区切り・大文字小文字は区別しません）。
+  DB の users テーブルによる管理は後続タスクで、現状は設定ベースです。
+- **`APP_ENV=production` では `/docs`・`/redoc`・`/openapi.json` を公開しません**（監査 F-14）。
+  開発時は従来どおり利用できます。
 - **AI 機能（過去経緯参照の本実装・作戦シートAI生成）を使うには Azure OpenAI / Azure AI Search の
   キーが必要**です（`AZURE_OPENAI_*` / `AZURE_SEARCH_*`）。未設定でも `USE_KRE_STUB=true`（既定）で
   KRE のスタブ実装（同梱 fixture を返す）を使えば開発を継続できます。

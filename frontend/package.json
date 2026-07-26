@@ -9,7 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "16.2.10",
+    "next": "16.2.11",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -19,8 +19,21 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "//overrides": "推移的依存の既知脆弱性のうち、上流（next）の更新では解消しないものだけを最小限に固定する（TV_MVP frontend の前例に倣う）。解除条件は '//overrides-解除条件' を参照し、条件を満たしたら該当エントリを削除すること。",
+  "//overrides-解除条件": {
+    "postcss": "next@16.2.11 が dependencies で postcss を 8.4.31 に完全固定しており、next の patch 更新では上がらないため固定する。脆弱性: GHSA-qx2v-qp2m-jg93 / GHSA-6g55-p6wh-862q / GHSA-r28c-9q8g-f849（修正版 8.5.18 以上）。【解除条件】next が dependencies で postcss >=8.5.18 を宣言したら、この override を削除する（確認方法: npm view next dependencies）。",
+    "sharp": "next@16.2.11 の optionalDependencies が sharp ^0.34.5 のままで 0.35 系へ上がらないため固定する。脆弱性: GHSA-f88m-g3jw-g9cj（libvips 由来 CVE-2026-33327 / 33328 / 35590 / 35591。修正版 0.35.0 以上）。【解除条件】next が optionalDependencies で sharp ^0.35.0 以上を宣言したら、この override を削除する（確認方法: npm view next optionalDependencies）。"
+  },
+  "overrides": {
+    "postcss": "^8.5.18",
+    "sharp": "^0.35.3"
+  },
+  "//受容-devDependencies": "本番イメージに同梱されない devDependencies 限定の既知脆弱性のうち、修正版が存在せず対処不能なものを、理由と期限を明記して受容する（[[セキュリティ規定]] §6「例外の受容」）。期限が来たら自動延長せず、解除条件を再確認して再判断すること。",
+  "//受容-devDependencies-明細": {
+    "brace-expansion": "GHSA-mh99-v99m-4gvg（DoS / unbounded expansion による OOM・high）。残存パスは node_modules/brace-expansion 1.1.16 の1本のみ（minimatch@3.1.5 → @eslint/config-array / @eslint/eslintrc / eslint / eslint-plugin-import / eslint-plugin-jsx-a11y / eslint-plugin-react / eslint-config-next へ波及し npm audit で high 9件と表示される）。【受容理由】(1) 1.x 系に修正版が存在しない（最新の 1.1.16 が未修正。修正は 5.0.8）。5.x は CJS ビルドの export が `module.exports = expand` から名前付き `exports.expand` へ変わっており、overrides で 5.0.8 を強制すると minimatch@3.1.5 の `expand(pattern)` が `TypeError: expand is not a function` で落ちて npm run lint が壊れる（2026-07-26 実測）。(2) 上流に逃げ道がない。eslint-plugin-import は最新 2.32.0 でも minimatch ^3.1.2 を要求し、eslint-config-next@16.2.11 がこれを固定している。eslint を 10 系へ上げても eslint-plugin-react@7.x が eslint 10 の context API 変更に未対応で lint が壊れ、かつ脆弱性は残る（`npm audit fix --force` は eslint-config-next を 12 系へダウングレードするため採用不可）。(3) 全パスが dev 依存であり、frontend/Dockerfile の runtime ステージ（.next/standalone）に同梱されない（`npm audit --omit=dev` は 0 件、standalone/node_modules に eslint・minimatch・brace-expansion は含まれない）。(4) glob パターンの供給元は自前の eslint.config.mjs であり外部入力ではないため、影響は開発機・CI の eslint プロセスに限定される。【期限】2027-01-21（TV_MVP frontend の受容期限に揃え、再判断を1回にまとめる）。【解除条件】eslint-plugin-import が minimatch >=10.0.3（brace-expansion ^5.0.8 系）を宣言する、または eslint-config-next が eslint 10 系＋更新済みプラグイン群に対応したら、依存を更新してこの受容を削除する（確認方法: npm view eslint-plugin-import dependencies.minimatch / npm view eslint-config-next dependencies）。【備考】Snyk CLI は既定で devDependencies を対象外とするため CI の Snyk ゲートには元々検出されない。.snyk への ignore 記載は対象が存在せず無効なため作成しない（2026-07-26 統括承認）。"
   }
 }

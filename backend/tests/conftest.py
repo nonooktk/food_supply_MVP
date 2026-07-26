@@ -13,16 +13,26 @@ freeradicals.db）に解決されるため、万一テストが実エンジン�
 from __future__ import annotations
 
 import os
-import uuid
-from dataclasses import dataclass
 
-import pytest
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+# --- app パッケージを import する前に認証設定を固定する ---------------------------
+# Settings は構築時に認証設定の整合性を検証し、不正な組み合わせでは例外を投げる
+# （app/config.py の _validate_auth_settings・監査 F-3）。開発者の backend/.env が
+# AUTH_MODE=google の場合にテスト収集が失敗しないよう、環境変数で mock/development に
+# 固定する（環境変数は .env より優先される）。テスト実行を .env の内容から独立させる意図で、
+# 既存の _isolate_sqlite_from_real_db（DB の隔離）と同じ考え方。
+os.environ["AUTH_MODE"] = "mock"
+os.environ["APP_ENV"] = "development"
 
-from app.db import models as m
-from app.db.models import Base
+import uuid  # noqa: E402
+from dataclasses import dataclass  # noqa: E402
+
+import pytest  # noqa: E402
+from sqlalchemy import create_engine, event  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from app.db import models as m  # noqa: E402
+from app.db.models import Base  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -36,9 +46,17 @@ def _isolate_sqlite_from_real_db(tmp_path_factory):
     from app.db import database
 
     tmp_db = tmp_path_factory.mktemp("frd_isolated_db") / "test.db"
-    saved = {k: os.environ.get(k) for k in ("DB_BACKEND", "SQLITE_PATH")}
+    saved = {
+        k: os.environ.get(k)
+        for k in ("DB_BACKEND", "SQLITE_PATH", "AUTH_MODE", "APP_ENV", "GOOGLE_CLIENT_ID", "ALLOWED_EMAILS")
+    }
     os.environ["DB_BACKEND"] = "sqlite"
     os.environ["SQLITE_PATH"] = str(tmp_db)
+    # 認証設定もテスト既定に固定する（.env 非依存。モジュール冒頭の設定と同じ意図）。
+    os.environ["AUTH_MODE"] = "mock"
+    os.environ["APP_ENV"] = "development"
+    os.environ["GOOGLE_CLIENT_ID"] = ""
+    os.environ["ALLOWED_EMAILS"] = ""
 
     def _reset_caches() -> None:
         get_settings.cache_clear()
@@ -116,7 +134,12 @@ class ApiHarness:
     sessionmaker: object
 
     def headers(self, *, tenant_id: str | None = None, user_id: str = "tanaka") -> dict:
+        """モックヘッダー方式の資格情報（AUTH_MODE=mock でのみ通る）。"""
         return {"X-Tenant-Id": tenant_id or self.tenant_id, "X-User-Id": user_id}
+
+    def bearer(self, token: str) -> dict:
+        """Bearer 方式の資格情報（AUTH_MODE=google で使う）。"""
+        return {"Authorization": f"Bearer {token}"}
 
     def new_session(self) -> Session:
         return self.sessionmaker()
@@ -140,7 +163,11 @@ def api(monkeypatch: pytest.MonkeyPatch) -> ApiHarness:
     # 認証モードのテスト既定（.env 値に依存させない）。
     _settings = get_settings()
     monkeypatch.setattr(_settings, "auth_mode", "mock")
+    monkeypatch.setattr(_settings, "app_env", "development")
     monkeypatch.setattr(_settings, "google_client_id", "")
+    monkeypatch.setattr(_settings, "allowed_emails_raw", "")
+    # ID トークンの検証結果キャッシュはテスト間で持ち越さない。
+    deps.reset_token_cache()
 
     engine = _memory_engine()
     SM = sessionmaker(bind=engine, future=True)

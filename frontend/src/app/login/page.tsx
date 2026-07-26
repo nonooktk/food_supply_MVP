@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { consumeSessionExpired } from "@/lib/authStorage";
 import { Button } from "@/components/ui/Button";
 import { MOCK_CREDENTIAL } from "@/lib/mock/data";
 import { loadGsiScript, type GsiCredentialResponse } from "@/lib/gsi";
@@ -30,11 +31,19 @@ export default function LoginPage() {
   const googleBtnRef = useRef<HTMLDivElement>(null);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [expired, setExpired] = useState(false);
 
   // 既ログインなら一覧へ
   useEffect(() => {
     if (!authLoading && user) router.replace("/cases");
   }, [authLoading, user, router]);
+
+  // API が 401 を返して弾かれた直後なら、その旨を表示する（ID トークンは約1時間で失効する）。
+  useEffect(() => {
+    // sessionStorage（外部システム）からの読み出しのための意図的な setState。
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setExpired(consumeSessionExpired());
+  }, []);
 
   // GIS コールバック: credential をバックエンドで検証してログイン
   async function handleCredential(res: GsiCredentialResponse) {
@@ -117,6 +126,16 @@ export default function LoginPage() {
           <h1 className="mt-2 text-xl font-bold text-slate-900">ふりぃらじかるず</h1>
           <p className="text-sm text-slate-500">購買交渉支援</p>
         </div>
+
+        {/* セッション切れ（ID トークンの有効期限は約1時間）。再ログインを促す。 */}
+        {expired && (
+          <p
+            role="status"
+            className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+          >
+            セッションの有効期限が切れました。もう一度ログインしてください。
+          </p>
+        )}
 
         {/* Google でログイン（認証シーム: google。GIS 公式ボタン） */}
         <div className="space-y-2">
