@@ -8,6 +8,11 @@ FR-03 / FR-08供給 を並行実装できる（§1・§5）。
 - ``retrieve`` は ``req.tenant_id`` を唯一の源泉とし、``enforce_tenant_boundary`` で
   id 接頭辞（``{tenant}:{type}:{pk}``・§4.2）が要求テナントと一致しない hit / node / edge /
   citation を機構的に除去する。fixture に他テナントデータが混入しても越境を物理的に遮断する。
+- ``graph_context.summary_text``（自然文・id を持たない）も検査対象とする（監査 F-9）。
+  他要素の汚染を検知した場合、または要約中に他テナントの id トークンを見つけた場合は、
+  要約全体を破棄する（fail-closed）。本体はこの要約を LLM プロンプトへ載せるため
+  （``app/api/strategy.py`` → ``StrategyContext.graph_summary``）、ここが唯一の非フィルタ経路
+  だった。
 
 config 反映（§10.5 受け入れ条件(2)・§11）:
 - ``search.top_k`` でヒット件数を制限し、``graph.enabled`` / ``options.include_graph`` で
@@ -19,6 +24,8 @@ config 反映（§10.5 受け入れ条件(2)・§11）:
 from __future__ import annotations
 
 import json
+import logging
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -32,8 +39,15 @@ from kre.contract import (
     RetrieveResult,
 )
 
+logger = logging.getLogger(__name__)
+
 # 同梱 fixture ディレクトリ（backend/kre/fixtures/）。
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
+
+# 自然文（summary_text）に紛れ込んだ id 形式トークン（``{tenant}:{type}:{pk}``・§4.2）を拾う。
+# 3 セグメント固定で照合するため、"10:30:00" のような時刻表記も形式上は一致しうるが、
+# その場合も「所属不明」として fail-closed 側（要約破棄）に倒す設計とする（監査 F-9）。
+_ID_TOKEN_RE = re.compile(r"[0-9A-Za-z_.\-]+:[0-9A-Za-z_.\-]+:[0-9A-Za-z_.\-]+")
 
 
 def _tenant_of(identifier: str) -> Optional[str]:
@@ -46,14 +60,53 @@ def _tenant_of(identifier: str) -> Optional[str]:
     return None
 
 
+def _summary_within_boundary(summary_text: str, tenant_id: str, graph_contaminated: bool) -> str:
+    """summary_text（自然文）にも越境検査をかける（監査 F-9・§10.5(4) の補強）。
+
+    summary_text は id を持たない自然文のため、接頭辞判定だけでは他テナントの取引先名が
+    載ったことを検出できない。そこで**2段の fail-closed 判定**を行う。
+
+    1. 要約の出所であるグラフ（node / edge）から他テナント要素が1件でも除去された
+       （``graph_contaminated``）なら、同じ汚染グラフから作られた要約は信頼できない →
+       **要約全体を破棄する**。想定シナリオ（グラフ生成不具合・索引再構築時の取り違え・
+       将来のクロステナント補完の追加）はいずれもグラフ側の混入を伴うため、ここで捕捉できる。
+       要約は ``kre/graph/graph_search.py`` の ``_summarize`` が採用済みノードだけから
+       組み立てるので、hit / citation（検索層）の汚染は要約の出所にならない＝判定に含めない。
+    2. グラフに除去が無くても、要約中に他テナント（または所属不明）の id トークンが
+       含まれていれば同様に破棄する。
+
+    どちらでもなければ要約をそのまま保持する（正常系の情報量を落とさない）。
+    """
+    if not summary_text:
+        return ""
+    if graph_contaminated:
+        logger.warning(
+            "[KRE] グラフに越境要素を検出したため graph_context.summary_text を破棄しました "
+            "(tenant_id=%s・監査 F-9)",
+            tenant_id,
+        )
+        return ""
+    foreign = [t for t in _ID_TOKEN_RE.findall(summary_text) if _tenant_of(t) != tenant_id]
+    if foreign:
+        logger.warning(
+            "[KRE] summary_text に他テナント id が含まれるため破棄しました "
+            "(tenant_id=%s・検出数=%d・監査 F-9)",
+            tenant_id,
+            len(foreign),
+        )
+        return ""
+    return summary_text
+
+
 def enforce_tenant_boundary(result: RetrieveResult, tenant_id: str) -> RetrieveResult:
     """RetrieveResult から要求テナント以外の要素を機構的に除去する（越境ゼロ・§10.5(4)）。
 
     - hit / citation: id 接頭辞が tenant_id と一致するものだけ残す。
     - node: id 接頭辞が一致するものだけ残す。
     - edge: src・dst の双方が一致するものだけ残す（片側でも他テナントなら除去）。
-
-    summary_text は自然文のため機械的除去はせず保持する（越境の実害は id を持つ要素で生じる）。
+    - summary_text: 自然文のため接頭辞では濾せない。グラフ（node / edge）の汚染検知、または
+      要約中の他テナント id 検出をもって**要約全体を破棄**する（fail-closed・監査 F-9）。
+      → 対象／対象外の範囲は docs/TASK_knowledge-graph-optimization.md §2.2 に明記している。
     """
     hits = [h for h in result.hits if _tenant_of(h.id) == tenant_id]
     citations = [c for c in result.citations if _tenant_of(c.id) == tenant_id]
@@ -63,13 +116,18 @@ def enforce_tenant_boundary(result: RetrieveResult, tenant_id: str) -> RetrieveR
         for e in result.graph_context.edges
         if _tenant_of(e.src) == tenant_id and _tenant_of(e.dst) == tenant_id
     ]
+    # グラフ（要約の出所）から1件でも除去された＝要約も信頼できない（fail-closed・F-9）。
+    graph_contaminated = len(nodes) != len(result.graph_context.nodes) or len(edges) != len(
+        result.graph_context.edges
+    )
+    summary_text = _summary_within_boundary(
+        result.graph_context.summary_text, tenant_id, graph_contaminated
+    )
     return result.model_copy(
         update={
             "hits": hits,
             "citations": citations,
-            "graph_context": GraphContext(
-                nodes=nodes, edges=edges, summary_text=result.graph_context.summary_text
-            ),
+            "graph_context": GraphContext(nodes=nodes, edges=edges, summary_text=summary_text),
         },
         deep=True,
     )
