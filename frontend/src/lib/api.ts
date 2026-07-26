@@ -5,6 +5,7 @@
 // 画面側は必ずこの `api` 経由でデータアクセスする（fetch を画面に直書きしない）。
 // これによりバックエンドの完成を待たずにフロントを先行開発できる。
 
+import { handleUnauthorized, loadAuthUser, loadIdToken } from "@/lib/authStorage";
 import { buildThreeLineResult, calcAnnualImpact } from "@/lib/calc";
 import {
   MOCK_AUTH_USER,
@@ -413,30 +414,32 @@ class MockApi implements Api {
 }
 
 /** ---- 実 API 実装（NEXT_PUBLIC_USE_MOCK=false）----
- * バックエンド（FastAPI・/api 配下・ポリゴン実装）と通信する。
- * 認証は MVP のモックヘッダー方式（X-Tenant-Id / X-User-Id）。ログインで得た AuthUser を
- * localStorage（auth.tsx と同じキー）から読み、各リクエストのヘッダーに付与する。
- * Entra（JWT）へ移行する際はここのヘッダー生成を Authorization: Bearer に差し替える。
+ * バックエンド（FastAPI・/api 配下）と通信する。
+ *
+ * 【認証（2026-07-26 セキュリティ監査 F-1 対応）】
+ * - 本番（バックエンド AUTH_MODE=google）: Google ログインで得た **ID トークン** を保持し、
+ *   毎リクエスト `Authorization: Bearer <id_token>` で送る。サーバが署名・aud・有効期限を
+ *   検証し、allowlist 照合のうえテナントを決める。
+ * - ローカル開発（バックエンド AUTH_MODE=mock）: ID トークンが無いため、従来の
+ *   X-Tenant-Id / X-User-Id ヘッダーへフォールバックする（mock モードでのみサーバが受理する）。
+ *
+ * ID トークンの寿命は約1時間。期限切れは 401 で返るため、資格情報を破棄して再ログインへ誘導する
+ * （サイレント更新は行わない）。
  */
-const AUTH_STORAGE_KEY = "freeradicals.auth.v1";
-
 class RealApi implements Api {
   private base = process.env.NEXT_PUBLIC_API_BASE ?? "/api";
 
-  /** localStorage の AuthUser からモック認証ヘッダーを組み立てる（未ログイン時は空）。 */
+  /** 認証ヘッダーを組み立てる（Bearer 優先・未ログイン時は空）。 */
   private authHeaders(): Record<string, string> {
-    if (typeof window === "undefined") return {};
-    try {
-      const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
-      if (!raw) return {};
-      const u = JSON.parse(raw) as AuthUser;
-      return { "X-Tenant-Id": u.tenantId, "X-User-Id": u.userId };
-    } catch {
-      return {};
-    }
+    const idToken = loadIdToken();
+    if (idToken) return { Authorization: `Bearer ${idToken}` };
+    // フォールバック: 開発用モックログイン（ID トークンを発行しない）。
+    const user = loadAuthUser();
+    if (user) return { "X-Tenant-Id": user.tenantId, "X-User-Id": user.userId };
+    return {};
   }
 
-  private async req<T>(path: string, init?: RequestInit): Promise<T> {
+  private async req<T>(path: string, init?: RequestInit, opts?: { isAuthCall?: boolean }): Promise<T> {
     const res = await fetch(`${this.base}${path}`, {
       ...init,
       headers: {
@@ -446,6 +449,11 @@ class RealApi implements Api {
       },
     });
     if (!res.ok) {
+      // 401 = 未認証／期限切れ。保持している資格情報は無効なので破棄し、再ログイン導線へ。
+      // ログイン API 自身の 401（資格情報が不正）はここで扱わない（画面がエラー表示する）。
+      if (res.status === 401 && !opts?.isAuthCall) {
+        handleUnauthorized();
+      }
       // バックエンドは RFC7807（application/problem+json）で title を返す。
       let message = `API エラー: ${res.status}`;
       try {
@@ -460,17 +468,20 @@ class RealApi implements Api {
   }
 
   login(tenant: string, userId: string, password: string): Promise<AuthUser> {
-    return this.req<AuthUser>("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ tenant, userId, password }),
-    });
+    return this.req<AuthUser>(
+      "/auth/login",
+      { method: "POST", body: JSON.stringify({ tenant, userId, password }) },
+      { isAuthCall: true },
+    );
   }
   googleAuth(credential: string): Promise<AuthUser> {
     // GIS の credential をバックエンド（AUTH_MODE=google）で検証してログインする。
-    return this.req<AuthUser>("/auth/google", {
-      method: "POST",
-      body: JSON.stringify({ credential }),
-    });
+    // 呼び出し元（auth.tsx）が credential を ID トークンとして保存し、以後の Bearer に使う。
+    return this.req<AuthUser>(
+      "/auth/google",
+      { method: "POST", body: JSON.stringify({ credential }) },
+      { isAuthCall: true },
+    );
   }
   listCases(filter: CaseListFilter): Promise<CaseListResult> {
     const q = new URLSearchParams();

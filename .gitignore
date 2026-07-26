@@ -24,6 +24,7 @@ htmlcov/
 .venv/
 venv/
 env/
+.venv-scan/          # セキュリティ監査（SCA）用の隔離 venv
 
 # ----- SQLite（ローカル開発用DB） -----
 *.db
