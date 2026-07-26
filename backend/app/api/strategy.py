@@ -214,8 +214,17 @@ def generate(
 
     draft = _to_draft(generated, pool)
     _persist_draft(repo, case_no, draft)
+    # 出力側検証の警告（監査 F-7 の3）: 生成文にコンテキスト外の数値が混じった場合に立つ。
+    # 「AI は価格を決めない」（RFP 2-3）が守られたかを事後追跡できるよう監査ログへ残す
+    # （数値そのものは業務値のため件数のみ記録する。秘匿情報をログに書かない＝セキュリティ規定）。
+    number_warnings = generated.get("number_warnings") or []
+    if number_warnings:
+        emit_error("strategy.number_guard", tenant_id=repo.tenant_id, trace_id=trace_id,
+                   error="ContextOutOfRangeNumber", case_no=case_no,
+                   unknown_number_count=len(number_warnings))
     emit_audit("strategy.generate", tenant_id=repo.tenant_id, user_id=user_id,
-               trace_id=trace_id, case_no=case_no, points=len(draft.points))
+               trace_id=trace_id, case_no=case_no, points=len(draft.points),
+               number_warning=bool(number_warnings))
     return draft
 
 
