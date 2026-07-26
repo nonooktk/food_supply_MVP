@@ -62,7 +62,9 @@ source .venv/bin/activate         # Windows は .venv\Scripts\activate
 
 # 2. 依存パッケージをインストール
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
+#   本番依存（requirements.txt）＋テスト依存（pytest / httpx）が入る。
+#   requirements.txt は本番イメージ用でテスト依存を含まない（監査 F-11・2026-07-26）。
 
 # 3. 環境変数ファイルを用意
 cp .env.example .env

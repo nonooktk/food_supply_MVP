@@ -18,10 +18,10 @@
 | 深刻度 | 件数 | 内訳 |
 | --- | --- | --- |
 | Blocker（本番前必須） | 2 | F-1（クライアント供給ヘッダのみの認証）／F-2（Google ログイン全世界開放） |
-| High（対応推奨） | 5 | F-3（本番 mock ガード無し）／F-4（next 依存脆弱性・SSR で実影響）／F-5（CI ゲートに定期実行無し）／F-6（ブランチ保護未設定）／F-7（LLM プロンプトインジェクション） |
+| High（対応推奨） | 4 | F-3（本番 mock ガード無し）／F-4（next 依存脆弱性・SSR で実影響）／F-5（CI ゲートに定期実行無し）／F-7（LLM プロンプトインジェクション）<br>※ **F-6（ブランチ保護未設定）は偽陽性と判明し撤回**（下記 C-8） |
 | Medium | 6 | F-8（mock ログイン無検証）／F-9（KRE summary_text の越境フィルタ免除）／F-10（web セキュリティヘッダ全欠落）／F-11（本番イメージにテスト依存同梱）／F-12（Dependabot PR 13件滞留）／F-13（Snyk 月間上限到達） |
 | Low | 12 | F-14〜F-22（情報露出・ヘッダ欠落・監査証跡・衛生。うち F-20〈SSR キャッシュ〉・F-21〈setuptools〉の2件は要確認）／**F-23〜F-25**（CSPM 由来。ACR 管理者資格情報・AI Search のキー認証＋公開網・共用 MySQL の個人 IP 滞留。いずれも他プロジェクトと共用のリソース） |
-| クリア（確認の結果 問題なし） | 7 | C-1〜C-7（IDOR 全経路・KRE 接頭辞判定・SQLi/OData/traversal/XSS・DAST 動的・CORS・Google トークン検証・秘匿値/backend 直接依存） |
+| クリア（確認の結果 問題なし） | 8 | C-1〜C-7（IDOR 全経路・KRE 接頭辞判定・SQLi/OData/traversal/XSS・DAST 動的・CORS・Google トークン検証・秘匿値/backend 直接依存）／**C-8**（ブランチ保護＝Rulesets `security-baseline` が active・bypass なし。F-6 の撤回に伴う） |
 
 **統括判断（2026-07-26）**: 本アプリは現時点で関係者しかアクセスしない運用のため、IP 制限による暫定封じは見送り、**本レポート作成後ただちに F-1・F-2 の修正へ着手**する方針。
 
@@ -110,7 +110,11 @@ frontend は Next.js の **SSR コンテナ**として Container Apps（external
 **CI ゲートと実測の乖離（重要な運用指摘）**: `.github/workflows/security.yml` は Snyk `--severity-threshold=high` で CI green。しかし実測では High が5件出る。原因は3層。
 
 - **F-5（High）**: CI ゲートに**定期実行（schedule）が無い**。トリガは `pull_request`／`push:main` のみで cron 無し。最終実行は 2026-07-21、該当 advisory は全件「new」＝それ以降の公表。→ **CI green は「2026-07-21 時点で green」であって「現在 green」ではない。**
-- **F-6（High）**: **ブランチ保護が未設定**（`404 Branch not protected`）。Required checks が無く、ゲートが赤でもマージできる。→ **社内セキュリティ規定 §6 基線チェックリスト5に未充足。**
+- ~~**F-6（High）**: ブランチ保護が未設定（`404 Branch not protected`）~~ → **偽陽性。撤回する（2026-07-26 訂正）。**
+  - **誤りの内容**: 確認に用いたのは `gh api repos/…/branches/main/protection`＝**classic ブランチ保護の API のみ**。GitHub の **Rulesets は別 API**（`/rulesets`）であることを見落とし、404 を「保護なし」と即断した。
+  - **実際**: `main` には **`security-baseline` という Rulesets が `enforcement: active` で存在**し、`Snyk (npm)` / `Snyk (pip)` を required status checks に指定、**`bypass_actors` は空（例外なし）**。→ **社内セキュリティ規定 §6 基線5 は充足済み。**
+  - **発覚の経緯**: 修正 PR のマージが `the base branch policy prohibits the merge` で拒否され、調査したところ Rulesets が機能していた。→ 保護は最初から正しく働いていた。
+  - **教訓**: GitHub のブランチ保護は **classic protection と Rulesets の2系統**がある。片方の API だけを見て「未設定」と判定してはいけない。→ ナレッジへ還元する。
 - **F-13（Medium）**: Snyk の**月間テスト上限（200件・org `nonooktk`）に到達済み**。上限到達時は `snyk test` がエラー終了するため、CI のゲートが「赤」ではなく「エラー」で止まり見落とされやすい。本監査でも backend Snyk・Snyk Code が実行できず、pip-audit／Semgrep で代替した。
 
 **運用の緩みも1件**: **F-12（Medium）**: Dependabot PR 13件が全て未マージ（全件 CI success）。`pytest` のセキュリティ更新（#15／#25）も放置されたまま。
@@ -219,7 +223,8 @@ Google ID トークンの検証そのものは適切（C-6）: `aud`・署名（
 - **TV_MVP との対比が本レポートの主題**。TV_MVP は「ツールでは出ない認可バグを人が見つけた」が主題だった。本件の主題は**「多層防御の最上段の欠落」と「規約と実装の乖離」**。IDOR という本丸で防御が効いていた分、余計に入口の欠落が際立つ。
 - **修正は安価。** `get_current_tenant` の差し替え1点で下層は無変更——**シームとして正しく設計されていたからこそ安く直せる**。ここは救い。
 - **SSR 稼働がリスクの質を変えている。** TV_MVP は静的エクスポートのため next の Critical/High が本番で動かなかったが、本アプリは SSR コンテナ稼働のため `next@16.2.10` の脆弱性（キャッシュ混同・内部 Server Function の未認証開示）が**実際に動く**。「静的エクスポートだから実害なし」の論法は今回使えない。
-- **CI ゲートは「green」だが「効いていない」。** 定期実行が無く（F-5）、ブランチ保護も無く（F-6）、Snyk 上限にも到達している（F-13）。→ **CI green は現在の安全を保証しない**という運用上の教訓が明確に出た。
+- **CI ゲートは「green」だが「効いていない」。** 定期実行が無く（F-5）、Snyk 上限にも到達している（F-13）。→ **CI green は現在の安全を保証しない**という運用上の教訓が出た。ただし**ブランチ保護（F-6）は当初「未設定」と判定したが誤りで、Rulesets により正しく機能していた**（上記訂正）。→ **監査する側も、確認手段が対象の全体を覆っているかを疑う必要がある**という反省点。
+- **F-13 の重要度は当初評価より高い。** required status checks が **Snyk の2つだけ**であるため、月間上限に達すると**チェックがエラーで止まり、誰もマージできなくなる**（ゲートの可用性リスクが、そのまま開発の停止に直結する）。→ アカウント不要の `npm audit`／`pip-audit` を併走させ、土台を二重化する必要がある。
 - **CSPM 未実施は本レポートの限界。** 本番 `CORS_ORIGINS` は DAST 実測で代替確認できたが、Storage/DB のネットワーク設定・Blob アクセス等は未確認のまま。後日埋め戻しが必要。
 
 ---
@@ -232,7 +237,7 @@ Google ID トークンの検証そのものは適切（C-6）: `aud`・署名（
 2. **F-2 修正（本番前必須・F-1 と同時）** → 許可 email／ドメインの allowlist を導入し、未登録アカウントは403で拒否。あわせて F-16（`email_verified` 未検証）を同時対応。
 3. **F-3 修正（小さく安全・先行実施可）** → `Settings` に `model_validator` を追加し、`app_env=production` かつ `auth_mode=mock` なら起動時に例外（fail-fast）。F-8（mock ログインのパスワード無検証）は F-3 で実質封じられる。
 4. **F-4（next patch 更新）** → `16.2.10 → 16.2.11`。SSR で本番影響があるため F-1/F-2 と並走で早期に着手。`sharp`／`postcss` も随伴解消の見込み。回帰は npm build/lint で確認。
-5. **F-5／F-6（CI ゲートの実効化）** → `security.yml` に schedule（cron）を追加。ブランチ保護を有効化し Required checks に Snyk ジョブを登録（社内セキュリティ規定 §6 基線の充足）。
+5. **F-5／F-13（CI ゲートの実効化）** → `security.yml` に schedule（cron・毎日 21:00 UTC＝翌 06:00 JST）を追加し、あわせて**アカウント不要の `npm audit`／`pip-audit` ジョブを併走**させる。Snyk の月間上限で必須チェックがエラー停止しても、ゲートが機能し続ける状態にする。**F-6（ブランチ保護）は Rulesets により既に充足済み**（上記訂正）のため対応不要。
 6. **F-7（LLM プロンプトインジェクション対策）** → `staff_memo`／`handover_note`／`product` に長さ上限。ユーザー入力をデリミタで囲みシステムプロンプトに明記。生成文中の数値の機械検証。
 7. **F-10（web セキュリティヘッダ追加）** → `next.config.ts` の `headers()` で CSP・X-Frame-Options・HSTS・Permissions-Policy・nosniff を配信。F-15 も同時解消。
 8. **F-9（KRE summary_text の越境フィルタ対象化）** → 多層防御の穴を塞ぐ。実害は現状無いが低コストで対応可能。
@@ -249,7 +254,7 @@ Google ID トークンの検証そのものは適切（C-6）: `aud`・署名（
 
 残る本丸は**入口の認証**（F-1・F-2）の2点。→ 修正は認証依存の差し替えに閉じており下層は無変更で済む。**シームとして正しく設計されていたからこそ、直すのは安い。**「多層防御は最上段が抜ければ意味を持たない」という教訓を、コストの小さい修正1つで裏づける事例として次案件へ持ち越したい。
 
-**5種すべて実施済み**。Blocker 2件・High 5件・Medium 6件・Low 12件（うち要確認2件＝F-20・F-21、CSPM 由来3件＝F-23〜F-25）を検出し、クリア7件を確認した。
+**5種すべて実施済み**。Blocker 2件・High 4件・Medium 6件・Low 12件（うち要確認2件＝F-20・F-21、CSPM 由来3件＝F-23〜F-25）を検出し、クリア8件を確認した。**F-6（ブランチ保護未設定）は偽陽性として撤回**した（Rulesets により保護は機能していた）。
 
 ---
 

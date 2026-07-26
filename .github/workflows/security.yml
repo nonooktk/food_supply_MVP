@@ -13,6 +13,11 @@ on:
   pull_request:
   push:
     branches: [main]
+  # 定期実行（監査 F-5）。依存を触らない期間でも、新規に公表された脆弱性を検知するため。
+  # これが無いと「最後に CI が回った時点で green」でしかなく、現在の安全を意味しない。
+  # cron は UTC。毎日 21:00 UTC = 翌 06:00 JST に実行する。
+  schedule:
+    - cron: "0 21 * * *"
 
 # 同一ブランチの古い実行はキャンセルして無駄な実行を減らす
 concurrency:
@@ -31,7 +36,8 @@ jobs:
     runs-on: ubuntu-latest
     # public リポジトリでは fork からの PR に SNYK_TOKEN（secrets）が渡らずジョブが必ず失敗する。
     # そのため fork PR ではスキップし、push と同一リポジトリ内 PR のときだけ実行する。
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # schedule 実行でもスキップされないよう「PR 以外は常に実行」の形にする（監査 F-5）。
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (2026-07-21 確認)
 
@@ -61,7 +67,8 @@ jobs:
     name: Snyk (pip)
     runs-on: ubuntu-latest
     # fork PR ではスキップ（SNYK_TOKEN が渡らないため）
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    # schedule 実行でもスキップされないよう「PR 以外は常に実行」の形にする（監査 F-5）。
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (2026-07-21 確認)
 
@@ -85,3 +92,44 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: snyk test --file=backend/requirements.txt --package-manager=pip --severity-threshold=high
+
+  # ── アカウント不要のスキャン（監査 F-13）─────────────────────────
+  # Snyk は org の月間テスト上限（200件）に達すると **失敗ではなくエラー** で止まる。
+  # 必須チェックが Snyk だけだと、その瞬間に誰もマージできなくなる（＝ゲートの可用性リスク）。
+  # → アカウント不要の npm audit / pip-audit を併走させ、ゲートの土台を二重化する。
+  #    fork PR でも secrets を必要としないため条件なしで動く。
+  audit-npm:
+    name: audit (npm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (2026-07-21 確認)
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0 (2026-07-21 確認)
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # --omit=dev は必須。devDependencies には配信物に含まれない既知の high が残っており
+      # （eslint 系の brace-expansion 連鎖・別タスクで対応中）、含めると常時赤になって
+      # ゲートが形骸化するため。本番同梱の依存だけを high 以上で落とす。
+      - name: npm audit (production deps only)
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+
+  audit-pip:
+    name: audit (pip)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (2026-07-21 確認)
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0 (2026-07-21 確認)
+        with:
+          python-version: "3.11"
+
+      - name: install pip-audit
+        run: pip install pip-audit
+
+      # requirements.txt を直接監査する（環境全体ではなく宣言された依存のみが対象）。
+      - name: pip-audit
+        run: pip-audit -r backend/requirements.txt
