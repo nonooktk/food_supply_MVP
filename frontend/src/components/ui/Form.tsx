@@ -39,6 +39,29 @@ export function Field({
   );
 }
 
+/**
+ * 残り文字数カウンタ（入力欄の直下・右寄せ）。
+ * 上限は backend の入力長上限（`@/lib/limits`）と同じ値を渡す。残り 10% で橙、超過で赤。
+ * 入力欄からは aria-describedby で参照させる（`id` を渡す）。
+ */
+export function CharCounter({ value, max, id }: { value: string; max: number; id?: string }) {
+  const remaining = max - value.length;
+  return (
+    <p
+      id={id}
+      className={`mt-1 text-right num text-xs ${
+        remaining < 0
+          ? "text-red-600"
+          : remaining <= max / 10
+            ? "text-amber-600"
+            : "text-slate-500"
+      }`}
+    >
+      残り {remaining.toLocaleString("ja-JP")} 文字 / 上限 {max.toLocaleString("ja-JP")} 文字
+    </p>
+  );
+}
+
 interface TextFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
   required?: boolean;

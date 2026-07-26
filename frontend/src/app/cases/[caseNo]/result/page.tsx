@@ -7,11 +7,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { TextField } from "@/components/ui/Form";
+import { CharCounter, TextField } from "@/components/ui/Form";
 import { ReasonTagSelector } from "@/components/ui/ReasonTagSelector";
 import { AchievementField, QuoteDiffField } from "@/components/ui/AutoCalcField";
 import { ErrorBanner } from "@/components/ui/states";
 import { api } from "@/lib/api";
+import { MAX_MEMO_LEN, lengthError } from "@/lib/limits";
 import {
   calcAchievementPct,
   calcQuoteDiffPct,
@@ -40,10 +41,16 @@ export default function ResultPage() {
   const [reasonCodes, setReasonCodes] = useState<string[]>([]);
   const [staffMemo, setStaffMemo] = useState(""); // 所感（今回案件の記録）
   const [handoverNote, setHandoverNote] = useState(""); // 次回への申し送り（次回案件への判断材料）
-  const [errors, setErrors] = useState<{ settled?: string; reason?: string }>({});
+  const [errors, setErrors] = useState<{
+    settled?: string;
+    reason?: string;
+    staffMemo?: string;
+    handoverNote?: string;
+  }>({});
 
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState(false);
+  // 保存失敗時に表示する文言。API のエラー本文（problem+json の title）をそのまま伝える。
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [completed, setCompleted] = useState<ResultRecord | null>(null);
 
   useEffect(() => {
@@ -98,11 +105,15 @@ export default function ResultPage() {
     const errs: typeof errors = {};
     if (!hasSettled) errs.settled = "決着単価を入力してください。";
     if (reasonCodes.length === 0) errs.reason = "決着理由を1つ以上選択してください。";
+    // 上限超過は API が 422 を返す（監査 F-7）。textarea の maxLength が効かない経路
+    // （上限追加前に保存された長い値の再編集など）に備え、送信前にも弾く。
+    errs.staffMemo = lengthError("所感", staffMemo.trim(), MAX_MEMO_LEN);
+    errs.handoverNote = lengthError("次回への申し送り", handoverNote.trim(), MAX_MEMO_LEN);
     setErrors(errs);
-    if (Object.keys(errs).length > 0) return;
+    if (Object.values(errs).some(Boolean)) return;
 
     setSaving(true);
-    setSaveError(false);
+    setSaveError(null);
     try {
       const record = await saveResult(caseNo, {
         settledPrice: settledNum,
@@ -113,8 +124,11 @@ export default function ResultPage() {
         handoverNote: handoverNote.trim(),
       });
       setCompleted(record);
-    } catch {
-      setSaveError(true);
+    } catch (e) {
+      // API は RFC7807 で title を返す（入力長超過等の 422 は「入力値が不正です」）。
+      // 原因が利用者に伝わるよう、汎用文言で塗り潰さずそのまま提示する。
+      const reason = e instanceof Error && e.message ? e.message : "保存に失敗しました。";
+      setSaveError(`${reason}（入力内容はそのままです。修正のうえ、もう一度お試しください）`);
     } finally {
       setSaving(false);
     }
@@ -178,9 +192,7 @@ export default function ResultPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-slate-900">結果記録</h1>
 
-      {saveError && (
-        <ErrorBanner message="保存に失敗しました。入力内容はそのままです。もう一度お試しください。" onRetry={save} />
-      )}
+      {saveError && <ErrorBanner message={saveError} onRetry={save} />}
 
       {/* 決着結果 */}
       <section className="rounded-lg border border-slate-200 bg-white p-5">
@@ -249,13 +261,24 @@ export default function ResultPage() {
           <h2 className="text-lg font-semibold text-slate-900">所感</h2>
           <p className="mt-1 text-sm text-slate-500">今回案件の記録（交渉の振り返り）。</p>
           <textarea
+            id="staff-memo"
             value={staffMemo}
-            onChange={(e) => setStaffMemo(e.target.value)}
+            onChange={(e) => {
+              setStaffMemo(e.target.value);
+              setErrors((p) => ({ ...p, staffMemo: undefined }));
+            }}
             rows={3}
-            className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+            maxLength={MAX_MEMO_LEN}
+            aria-invalid={!!errors.staffMemo}
+            aria-describedby="staff-memo-count"
+            className={`mt-3 w-full rounded-md border px-3 py-2 text-sm
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+                errors.staffMemo ? "border-red-500" : "border-slate-300"
+              }`}
             placeholder="例: 数量コミットで着地付近に収めた（任意）"
           />
+          <CharCounter id="staff-memo-count" value={staffMemo} max={MAX_MEMO_LEN} />
+          {errors.staffMemo && <p className="mt-1 text-xs text-red-600">{errors.staffMemo}</p>}
         </div>
         {/* 次回への申し送り（次回案件への判断材料） */}
         <div>
@@ -264,13 +287,24 @@ export default function ResultPage() {
             次回案件への判断材料。次に同一商材×取引先で案件を作成したとき、②情報収集「過去経緯」に表示されます。
           </p>
           <textarea
+            id="handover-note"
             value={handoverNote}
-            onChange={(e) => setHandoverNote(e.target.value)}
+            onChange={(e) => {
+              setHandoverNote(e.target.value);
+              setErrors((p) => ({ ...p, handoverNote: undefined }));
+            }}
             rows={3}
-            className="mt-3 w-full rounded-md border border-slate-300 px-3 py-2 text-sm
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1"
+            maxLength={MAX_MEMO_LEN}
+            aria-invalid={!!errors.handoverNote}
+            aria-describedby="handover-note-count"
+            className={`mt-3 w-full rounded-md border px-3 py-2 text-sm
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 ${
+                errors.handoverNote ? "border-red-500" : "border-slate-300"
+              }`}
             placeholder="例: 次回は数量カードを早めに切る（任意）"
           />
+          <CharCounter id="handover-note-count" value={handoverNote} max={MAX_MEMO_LEN} />
+          {errors.handoverNote && <p className="mt-1 text-xs text-red-600">{errors.handoverNote}</p>}
         </div>
       </section>
 
