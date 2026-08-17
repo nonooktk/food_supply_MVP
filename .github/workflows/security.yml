@@ -1,23 +1,32 @@
 # Snyk による依存脆弱性の CI ゲート。
-# high 以上の既知脆弱性が混入した場合に CI を失敗させ、マージをブロックする。
+# high 以上の既知脆弱性が混入した場合に CI を失敗させる。
 #
 # このファイルは github-repo-security スキルの templates/security.yml を元に生成する。
 # freeradicals は npm=frontend / pip=backend の単一構成。
-# ジョブ名 "Snyk (npm)" / "Snyk (pip)" はブランチ保護の Required checks と一致させる。
 #
 # サードパーティ Action はサプライチェーン改ざん対策として完全長コミット SHA に固定する
 # （タグは後から移動されうるため）。行末コメントに対応バージョンと確認日を併記する。
+#
+# ── 自動実行の停止（2026-08-17 統括承認）─────────────────────────
+# 統括の指示により、自動トリガー（push / pull_request / 定期実行 schedule）を
+# すべて外し、workflow_dispatch による手動実行のみに変更した。
+#   停止前: on: [pull_request, push(main), schedule("0 21 * * *")]
+# 停止の背景: 2026-08-12 以降の定期実行が毎日 failure となっていた
+#            （Snyk 側の要因。SNYK_TOKEN 失効ないし org の月間テスト上限）。
+# 再開する場合は、上記の停止前トリガーを `on:` に書き戻すだけでよい。
+#
+# 【重要】Rulesets との連動: main には ruleset `security-baseline`（id 19391873）があり、
+# 停止前は required status checks に "Snyk (npm)" / "Snyk (pip)" を指定していた
+# （bypass_actors 空＝例外なし）。自動トリガーを外すとこの2チェックが永久に報告されず
+# main への PR がマージ不能になるため、同時に ruleset 側から必須チェックを削除している。
+# → 本ワークフローを自動実行へ戻す際は、ruleset の required_status_checks も
+#    合わせて復元すること（片方だけ戻すとゲートが形骸化する／マージが詰まる）。
 name: security
 
 on:
-  pull_request:
-  push:
-    branches: [main]
-  # 定期実行（監査 F-5）。依存を触らない期間でも、新規に公表された脆弱性を検知するため。
-  # これが無いと「最後に CI が回った時点で green」でしかなく、現在の安全を意味しない。
-  # cron は UTC。毎日 21:00 UTC = 翌 06:00 JST に実行する。
-  schedule:
-    - cron: "0 21 * * *"
+  # 手動実行のみ（GitHub の Actions 画面 → security → Run workflow）。
+  # CLI からは: gh workflow run security.yml
+  workflow_dispatch:
 
 # 同一ブランチの古い実行はキャンセルして無駄な実行を減らす
 concurrency:
