@@ -14,6 +14,6 @@
 
 # ----- テスト -----
 # PYSEC-2026-1845（pytest 8.3.4）の修正版。監査 F-11 で 8.3.4 → 9.0.3 へ更新。
-pytest==9.0.3
+pytest==9.1.1
 # FastAPI/Starlette の TestClient が内部で利用する（本番コードからは import しない）。
 httpx==0.28.1
