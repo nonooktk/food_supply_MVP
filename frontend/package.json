@@ -21,7 +21,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "//overrides": "推移的依存の既知脆弱性のうち、上流（next）の更新では解消しないものだけを最小限に固定する（TV_MVP frontend の前例に倣う）。解除条件は '//overrides-解除条件' を参照し、条件を満たしたら該当エントリを削除すること。",
   "//overrides-解除条件": {
